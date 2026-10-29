@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+/* Dark is the default; light is opt-in through html[data-theme="light"]. */
+:root {
+  --bg: #0b1513;
+  --panel: #12201d;
+  --panel-2: #182a26;
+  --line: #24403a;
+  --text: #e4ede9;
+  --muted: #93aaa3;
+  --accent: #e8b94c;
+  --accent-ink: #1a1405;
+  --gain: #4ad6a0;
+  --loss: #ff8076;
+  --focus: #e8b94c;
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  --bg: #eef2ee;
+  --panel: #ffffff;
+  --panel-2: #f2f6f3;
+  --line: #d3ddd6;
+  --text: #14211d;
+  --muted: #556862;
+  --accent: #9a6a00;
+  --accent-ink: #ffffff;
+  --gain: #0a7a50;
+  --loss: #b8312a;
+  --focus: #9a6a00;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel2: var(--panel-2);
+  --color-line: var(--line);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accentink: var(--accent-ink);
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
+  --font-sans: var(--font-body), "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0.45;
+  }
+}
+.skeleton {
+  background: var(--panel-2);
+  border-radius: 4px;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
