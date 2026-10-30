@@ -1,5 +1,5 @@
 "use client";
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import { direction, fmtPct, fmtSigned } from "@/lib/format";
 import type { ApiErr } from "@/lib/use-api";
 
@@ -17,7 +17,9 @@ export function Panel({
   bodyClass?: string;
 }) {
   return (
-    <section className={`flex min-h-0 flex-col rounded-lg border border-line bg-panel ${className}`}>
+    <section
+      className={`flex min-h-0 flex-col rounded-lg border border-line bg-panel ${className}`}
+    >
       {(title || right) && (
         <header className="flex min-h-10 items-center justify-between gap-3 border-b border-line px-3 py-1">
           <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
@@ -41,7 +43,11 @@ export function Tabs<T extends string>({
   label: string;
 }) {
   return (
-    <div role="tablist" aria-label={label} className="flex gap-0.5 rounded-md bg-panel2 p-0.5">
+    <div
+      role="tablist"
+      aria-label={label}
+      className="flex gap-0.5 rounded-md bg-panel2 p-0.5"
+    >
       {tabs.map((t) => {
         const active = t.id === value;
         return (
@@ -52,8 +58,10 @@ export function Tabs<T extends string>({
             onClick={() => onChange(t.id)}
             onKeyDown={(e) => {
               const i = tabs.findIndex((x) => x.id === value);
-              if (e.key === "ArrowRight") onChange(tabs[(i + 1) % tabs.length].id);
-              if (e.key === "ArrowLeft") onChange(tabs[(i - 1 + tabs.length) % tabs.length].id);
+              if (e.key === "ArrowRight")
+                onChange(tabs[(i + 1) % tabs.length].id);
+              if (e.key === "ArrowLeft")
+                onChange(tabs[(i - 1 + tabs.length) % tabs.length].id);
             }}
             className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
               active ? "bg-accent text-accentink" : "text-muted hover:text-ink"
@@ -68,7 +76,11 @@ export function Tabs<T extends string>({
 }
 
 const ARROW = { up: "▲", down: "▼", flat: "▬" } as const;
-const COLOUR = { up: "text-gain", down: "text-loss", flat: "text-muted" } as const;
+const COLOUR = {
+  up: "text-gain",
+  down: "text-loss",
+  flat: "text-muted",
+} as const;
 
 /** Signed change with an arrow, so direction never relies on colour alone. */
 export function Change({
@@ -86,18 +98,36 @@ export function Change({
 }) {
   const dir = direction(pct ?? value);
   return (
-    <span className={`inline-flex items-center gap-1 whitespace-nowrap ${COLOUR[dir]} ${className}`}>
+    <span
+      className={`inline-flex items-center gap-1 whitespace-nowrap ${COLOUR[dir]} ${className}`}
+    >
       <span aria-hidden className="text-[0.7em]">
         {ARROW[dir]}
       </span>
-      {showValue && value !== undefined && <span>{fmtSigned(value, digits)}</span>}
-      {pct !== undefined && <span>{showValue && value !== undefined ? `(${fmtPct(pct)})` : fmtPct(pct)}</span>}
-      <span className="sr-only">{dir === "up" ? "up" : dir === "down" ? "down" : "unchanged"}</span>
+      {showValue && value !== undefined && (
+        <span>{fmtSigned(value, digits)}</span>
+      )}
+      {pct !== undefined && (
+        <span>
+          {showValue && value !== undefined ? `(${fmtPct(pct)})` : fmtPct(pct)}
+        </span>
+      )}
+      <span className="sr-only">
+        {dir === "up" ? "up" : dir === "down" ? "down" : "unchanged"}
+      </span>
     </span>
   );
 }
 
-export function ErrorBox({ error, onRetry, compact = false }: { error: ApiErr; onRetry?: () => void; compact?: boolean }) {
+export function ErrorBox({
+  error,
+  onRetry,
+  compact = false,
+}: {
+  error: ApiErr;
+  onRetry?: () => void;
+  compact?: boolean;
+}) {
   const title =
     error.code === "rate_limited"
       ? "Yahoo is rate limiting requests"
@@ -129,7 +159,175 @@ export function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`skeleton ${className}`} aria-hidden />;
 }
 
-export function StaleNote({ show }: { show: boolean }) {
-  if (!show) return null;
-  return <span className="text-xs text-muted">Refresh failed, showing last data</span>;
+const NOW_STEP = 5_000;
+function subscribeNow(cb: () => void) {
+  const id = setInterval(cb, NOW_STEP);
+  return () => clearInterval(id);
+}
+/** Current time in 5s steps, so "checked 20 s ago" labels tick. 0 during SSR. */
+export function useNow(): number {
+  return useSyncExternalStore(
+    subscribeNow,
+    () => Math.floor(Date.now() / NOW_STEP) * NOW_STEP,
+    () => 0,
+  );
+}
+
+export function agoShort(t: number, now: number): string {
+  const s = Math.max(0, Math.round((now - t) / 1000));
+  if (s < 10) return "just now";
+  if (s < 60) return `${s} s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
+}
+
+/** Clock time in the viewer's zone; adds the weekday or date when it is not today. */
+export function whenShort(t: number, now: number): string {
+  const d = new Date(t);
+  const time = d.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  if (d.toDateString() === new Date(now).toDateString()) return time;
+  const days = (now - t) / 86_400_000;
+  const day = d.toLocaleDateString(
+    undefined,
+    days < 6 ? { weekday: "short" } : { day: "numeric", month: "short" },
+  );
+  return `${day} ${time}`;
+}
+
+const whenLong = (t: number) =>
+  new Date(t).toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+/** Newest of a list of timestamps (ms), ignoring missing ones. */
+export function newest(times: (number | null | undefined)[]): number | null {
+  let m: number | null = null;
+  for (const t of times) if (t && (m === null || t > m)) m = t;
+  return m;
+}
+
+/**
+ * How fresh a panel's data is: when the underlying prices/stories are from,
+ * when this page last fetched them, and whether it is auto-refreshing.
+ * Click to refresh now.
+ */
+export function Freshness({
+  dataTime,
+  updatedAt,
+  refreshMs,
+  stale = false,
+  onRefresh,
+  kind = "prices",
+}: {
+  /** time of the newest trade or story in the data (ms) */
+  dataTime: number | null | undefined;
+  /** when this page last fetched successfully (ms) */
+  updatedAt: number | undefined;
+  /** current auto-refresh interval; 0 means paused */
+  refreshMs: number;
+  stale?: boolean;
+  onRefresh?: () => void;
+  kind?: "prices" | "news" | "chart";
+}) {
+  const now = useNow();
+  if (!now || !updatedAt) return <span className="h-4 w-24" aria-hidden />;
+  const label =
+    kind === "news" ? "Latest story" : kind === "chart" ? "Chart to" : "Prices";
+  const lines = [
+    dataTime
+      ? kind === "news"
+        ? `Newest story published ${whenLong(dataTime)} (your time).`
+        : `Last trade in this data: ${whenLong(dataTime)} (your time). Source: Yahoo Finance; free quotes can lag the exchange by up to 15-20 min.`
+      : "The source did not give a time for this data.",
+    `This page last fetched it ${agoShort(updatedAt, now)} (${whenLong(updatedAt)}). The server reuses a fetch for up to ${kind === "news" ? "15 min" : kind === "chart" ? "10 min" : "60 s"}.`,
+    refreshMs > 0
+      ? `Auto-refreshing every ${Math.round(refreshMs / 1000)} s while the market is open.`
+      : kind === "news"
+        ? "Not auto-refreshing right now."
+        : "Market closed, so not auto-refreshing: prices are from the last session.",
+    stale
+      ? "The last refresh failed, so you are seeing the previous data."
+      : "",
+    onRefresh ? "Click to refresh now." : "",
+  ].filter(Boolean);
+  const body = (
+    <>
+      <span
+        aria-hidden
+        className={`inline-block size-1.5 shrink-0 rounded-full ${stale ? "bg-loss" : refreshMs > 0 ? "bg-gain" : "bg-muted"}`}
+      />
+      <span className="truncate">
+        {dataTime
+          ? `${label} ${whenShort(dataTime, now)}`
+          : `${label} time unknown`}
+        <span className="hidden xl:inline">
+          {" "}
+          · checked {agoShort(updatedAt, now)}
+        </span>
+        {stale && <span className="text-loss"> · refresh failed</span>}
+      </span>
+      {onRefresh && (
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className="size-3 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+          <path d="M21 3v5h-5" />
+        </svg>
+      )}
+    </>
+  );
+  const NL = "\n";
+  const cls =
+    "inline-flex min-w-0 items-center gap-1.5 text-xs whitespace-nowrap text-muted";
+  return onRefresh ? (
+    <button
+      type="button"
+      onClick={onRefresh}
+      title={lines.join(NL)}
+      className={`${cls} rounded hover:text-accent`}
+    >
+      {body}
+    </button>
+  ) : (
+    <span title={lines.join(NL)} className={cls}>
+      {body}
+    </span>
+  );
+}
+
+/** Last-trade time for one quote, e.g. "3:42 pm" or "Thu 4:10 pm" when it is from an earlier day. */
+export function QuoteTime({
+  t,
+  className = "",
+}: {
+  t: number | null | undefined;
+  className?: string;
+}) {
+  const now = useNow();
+  if (!now || !t) return null;
+  return (
+    <span
+      className={`text-[11px] whitespace-nowrap text-muted ${className}`}
+      title={`Last trade ${whenLong(t)} (your time)`}
+    >
+      {whenShort(t, now)}
+    </span>
+  );
 }

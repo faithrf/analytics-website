@@ -2,8 +2,9 @@
 import { direction, fmtNum, priceDigits } from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import { useRefreshMs } from "@/lib/use-market-status";
+import type { RegionId } from "@/lib/markets";
 import type { QuoteDTO } from "@/lib/yahoo";
-import { Change, ErrorBox, Skeleton } from "@/components/ui";
+import { Change, ErrorBox, QuoteTime, Skeleton } from "@/components/ui";
 import { Sparkline } from "@/components/Sparkline";
 
 interface Tile {
@@ -14,9 +15,12 @@ interface Tile {
   prevClose: number | null;
 }
 
-export function IndexTiles() {
-  const refresh = useRefreshMs();
-  const { data, error, loading, reload } = useApi<{ tiles: Tile[] }>("/api/overview", refresh);
+export function IndexTiles({ regionId }: { regionId: RegionId }) {
+  const refresh = useRefreshMs(regionId);
+  const { data, error, loading, reload } = useApi<{ tiles: Tile[] }>(
+    `/api/overview?region=${regionId}`,
+    refresh,
+  );
 
   if (error && !data) {
     return (
@@ -30,7 +34,10 @@ export function IndexTiles() {
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       {(loading || !data ? [null, null, null] : data.tiles).map((t, i) =>
         t === null ? (
-          <div key={i} className="h-[116px] rounded-lg border border-line bg-panel p-3">
+          <div
+            key={i}
+            className="h-[116px] rounded-lg border border-line bg-panel p-3"
+          >
             <Skeleton className="mb-2 h-4 w-24" />
             <Skeleton className="mb-2 h-7 w-32" />
             <Skeleton className="h-4 w-28" />
@@ -50,11 +57,21 @@ function TileCard({ tile }: { tile: Tile }) {
   return (
     <div className="flex h-[116px] items-stretch justify-between gap-2 rounded-lg border border-line bg-panel p-3">
       <div className="flex min-w-0 flex-col justify-between">
-        <div className="text-sm text-muted">{tile.label}</div>
+        <div className="flex items-baseline gap-2 text-sm text-muted">
+          {tile.label}
+          <QuoteTime t={q?.time} />
+        </div>
         {q ? (
           <>
-            <div className="text-[1.65rem] leading-none font-semibold tracking-tight">{fmtNum(q.price, digits)}</div>
-            <Change value={q.change} pct={q.changePct} digits={digits} className="text-sm font-medium" />
+            <div className="text-[1.65rem] leading-none font-semibold tracking-tight">
+              {fmtNum(q.price, digits)}
+            </div>
+            <Change
+              value={q.change}
+              pct={q.changePct}
+              digits={digits}
+              className="text-sm font-medium"
+            />
           </>
         ) : (
           <div className="text-sm text-muted">Quote unavailable</div>

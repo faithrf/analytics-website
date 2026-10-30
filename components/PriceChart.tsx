@@ -1,5 +1,5 @@
 "use client";
-import { Area, Bar, ComposedChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, Bar, CartesianGrid, Cell, ComposedChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { ChartDTO } from "@/lib/yahoo";
 import type { Range } from "@/lib/ranges";
 import { direction, fmtCompact, fmtNum } from "@/lib/format";
@@ -62,6 +62,7 @@ export function PriceChart({ chart, range }: { chart: ChartDTO; range: Range }) 
             <stop offset="100%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
+        <CartesianGrid yAxisId="p" vertical={false} stroke="var(--line)" strokeOpacity={0.6} />
         <XAxis
           dataKey="t"
           tickFormatter={(t: number) => tickFormat(range, t)}
@@ -85,7 +86,13 @@ export function PriceChart({ chart, range }: { chart: ChartDTO; range: Range }) 
         {showPrev && (
           <ReferenceLine yAxisId="p" y={chart.prevClose!} stroke="var(--muted)" strokeDasharray="4 4" />
         )}
-        <Bar yAxisId="v" dataKey="volume" fill="var(--muted)" fillOpacity={0.35} isAnimationActive={false} />
+        {/* Volume bars take the colour of their bar's move, as on most trading charts. */}
+        <Bar yAxisId="v" dataKey="volume" fillOpacity={0.35} isAnimationActive={false}>
+          {pts.map((p, i) => {
+            const prev = i > 0 ? pts[i - 1].close : (chart.prevClose ?? p.close);
+            return <Cell key={p.t} fill={p.close > prev ? "var(--gain)" : p.close < prev ? "var(--loss)" : "var(--muted)"} />;
+          })}
+        </Bar>
         <Area
           yAxisId="p"
           dataKey="close"

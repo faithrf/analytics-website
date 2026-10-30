@@ -1,13 +1,29 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { MoverRow, SectorAverage } from "@/lib/aggregate";
-import { direction, fmtCompact, fmtNum, fmtPct, priceDigits } from "@/lib/format";
+import {
+  direction,
+  fmtCompact,
+  fmtNum,
+  fmtPct,
+  priceDigits,
+} from "@/lib/format";
 import { useApi } from "@/lib/use-api";
 import { useRefreshMs } from "@/lib/use-market-status";
 import { IndexTiles } from "@/components/IndexTiles";
-import { WatchlistPanel } from "@/components/WatchlistPanel";
-import { Change, ErrorBox, Panel, Skeleton, StaleNote, Tabs } from "@/components/ui";
+import { PinnedPanel } from "@/components/PinnedPanel";
+import { REGIONS, region, type RegionId } from "@/lib/markets";
+import { displayCode } from "@/lib/symbols";
+import {
+  Change,
+  ErrorBox,
+  Freshness,
+  Panel,
+  Skeleton,
+  Tabs,
+} from "@/components/ui";
 
 interface MoversData {
   gainers: MoverRow[];
@@ -18,6 +34,7 @@ interface MoversData {
   total: number;
   missing: number;
   asOf: string;
+  quoteTime: number | null;
 }
 
 const MOVER_TABS = [
@@ -27,19 +44,37 @@ const MOVER_TABS = [
 ] as const;
 type MoverTab = (typeof MOVER_TABS)[number]["id"];
 
-export function Dashboard() {
-  const refresh = useRefreshMs();
-  const movers = useApi<MoversData>("/api/movers", refresh);
+const REGION_TABS = REGIONS.map((r) => ({ id: r.id, label: r.label }));
+
+export function Markets({ regionId }: { regionId: RegionId }) {
+  const router = useRouter();
+  const refresh = useRefreshMs(regionId);
+  const movers = useApi<MoversData>(`/api/movers?region=${regionId}`, refresh);
 
   return (
     <div className="grid h-full min-h-0 gap-3 lg:grid-cols-12 lg:grid-rows-1">
       <div className="flex min-h-0 flex-col gap-3 lg:col-span-8">
-        <IndexTiles />
-        <MoversPanel {...movers} />
+        <div className="flex shrink-0 items-center justify-between gap-3">
+          <Tabs
+            tabs={REGION_TABS}
+            value={regionId}
+            onChange={(id) =>
+              router.replace(id === "au" ? "/" : `/?region=${id}`, {
+                scroll: false,
+              })
+            }
+            label="Market"
+          />
+          <span className="truncate text-xs text-muted">
+            Prices in {region(regionId).currency}
+          </span>
+        </div>
+        <IndexTiles regionId={regionId} />
+        <MoversPanel {...movers} regionId={regionId} refresh={refresh} />
       </div>
       <div className="flex min-h-0 flex-col gap-3 lg:col-span-4">
-        <SectorHeatmap {...movers} />
-        <WatchlistPanel />
+        <SectorHeatmap {...movers} refresh={refresh} />
+        <PinnedPanel />
       </div>
     </div>
   );
@@ -47,18 +82,38 @@ export function Dashboard() {
 
 type MoversState = ReturnType<typeof useApi<MoversData>>;
 
-function MoversPanel({ data, error, loading, stale, reload }: MoversState) {
+function MoversPanel({
+  data,
+  error,
+  loading,
+  stale,
+  reload,
+  updatedAt,
+  regionId,
+  refresh,
+}: MoversState & { regionId: RegionId; refresh: number }) {
   const [tab, setTab] = useState<MoverTab>("gainers");
   const rows = data?.[tab] ?? [];
 
   return (
     <Panel
       className="min-h-[260px] flex-1"
-      title="ASX 200 movers"
+      title={`${region(regionId).listName} movers`}
       right={
         <>
-          <StaleNote show={stale} />
-          <Tabs tabs={MOVER_TABS} value={tab} onChange={setTab} label="Movers" />
+          <Freshness
+            dataTime={data?.quoteTime}
+            updatedAt={updatedAt}
+            refreshMs={refresh}
+            stale={stale}
+            onRefresh={reload}
+          />
+          <Tabs
+            tabs={MOVER_TABS}
+            value={tab}
+            onChange={setTab}
+            label="Movers"
+          />
         </>
       }
       bodyClass="overflow-auto"
@@ -75,7 +130,9 @@ function MoversPanel({ data, error, loading, stale, reload }: MoversState) {
         </div>
       ) : rows.length === 0 ? (
         <p className="p-4 text-sm text-muted">
-          {tab === "active" ? "No volume data yet." : `No ${tab} right now. Prices are unchanged or the market has not opened.`}
+          {tab === "active"
+            ? "No volume data yet."
+            : `No ${tab} right now. Prices are unchanged or the market has not opened.`}
         </p>
       ) : (
         <table className="w-full text-sm">
@@ -91,21 +148,33 @@ function MoversPanel({ data, error, loading, stale, reload }: MoversState) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.code} className="border-b border-line/60 last:border-0 hover:bg-panel2">
+              <tr
+                key={r.code}
+                className="border-b border-line/60 last:border-0 hover:bg-panel2"
+              >
                 <td className="px-3 py-1.5">
-                  <Link href={`/stock/${r.code}`} className="font-semibold text-accent hover:underline">
-                    {r.code}
+                  <Link
+                    href={`/stock/${r.code}`}
+                    className="font-semibold text-accent hover:underline"
+                  >
+                    {displayCode(r.code)}
                   </Link>
                 </td>
-                <td className="max-w-[260px] truncate px-2 py-1.5 text-muted">{r.name}</td>
-                <td className="px-2 py-1.5 text-right">{fmtNum(r.price, priceDigits(r.price))}</td>
+                <td className="max-w-[260px] truncate px-2 py-1.5 text-muted">
+                  {r.name}
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  {fmtNum(r.price, priceDigits(r.price))}
+                </td>
                 <td className="px-2 py-1.5 text-right">
                   <Change value={r.change} digits={priceDigits(r.price)} />
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
                   <Change pct={r.changePct} showValue={false} />
                 </td>
-                <td className="px-3 py-1.5 text-right text-muted">{fmtCompact(r.volume)}</td>
+                <td className="px-3 py-1.5 text-right text-muted">
+                  {fmtCompact(r.volume)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -115,13 +184,36 @@ function MoversPanel({ data, error, loading, stale, reload }: MoversState) {
   );
 }
 
-function SectorHeatmap({ data, error, loading, reload }: MoversState) {
+function SectorHeatmap({
+  data,
+  error,
+  loading,
+  reload,
+  stale,
+  updatedAt,
+  refresh,
+}: MoversState & { refresh: number }) {
   const sectors = data?.sectors ?? [];
   return (
     <Panel
       className="min-h-[220px] flex-[1.15]"
       title="Sectors, average % change"
-      right={data && <span className="text-xs text-muted">{data.covered}/{data.total} stocks</span>}
+      right={
+        data && (
+          <>
+            <span className="text-xs text-muted">
+              {data.covered}/{data.total} stocks
+            </span>
+            <Freshness
+              dataTime={data.quoteTime}
+              updatedAt={updatedAt}
+              refreshMs={refresh}
+              stale={stale}
+              onRefresh={reload}
+            />
+          </>
+        )
+      }
       bodyClass="p-2"
     >
       {error && !data ? (
@@ -139,16 +231,29 @@ function SectorHeatmap({ data, error, loading, reload }: MoversState) {
           {sectors.map((s) => {
             const dir = direction(s.avgPct);
             const strength = Math.min(1, Math.abs(s.avgPct) / 2); // saturates at +/-2%
-            const base = dir === "up" ? "var(--gain)" : dir === "down" ? "var(--loss)" : "var(--muted)";
+            const base =
+              dir === "up"
+                ? "var(--gain)"
+                : dir === "down"
+                  ? "var(--loss)"
+                  : "var(--muted)";
             return (
               <li
                 key={s.sector}
                 className="flex min-h-0 flex-col justify-between rounded-md border border-line px-2 py-1.5"
-                style={{ background: `color-mix(in oklab, ${base} ${Math.round(10 + strength * 32)}%, var(--panel))` }}
+                style={{
+                  background: `color-mix(in oklab, ${base} ${Math.round(10 + strength * 32)}%, var(--panel))`,
+                }}
                 title={`${s.sector}: ${fmtPct(s.avgPct)} across ${s.count} stocks`}
               >
-                <span className="text-xs leading-tight font-medium">{s.sector}</span>
-                <Change pct={s.avgPct} showValue={false} className="text-sm font-semibold !text-ink" />
+                <span className="text-xs leading-tight font-medium">
+                  {s.sector}
+                </span>
+                <Change
+                  pct={s.avgPct}
+                  showValue={false}
+                  className="text-sm font-semibold !text-ink"
+                />
               </li>
             );
           })}

@@ -169,3 +169,31 @@ describe("early close 14:10 on Christmas Eve and New Year's Eve", () => {
     expect(nextTransition(d("2026-12-24T01:00:00Z")).toISOString()).toBe("2026-12-24T03:10:00.000Z");
   });
 });
+
+describe("other markets", () => {
+  it("follows New York hours across US daylight saving", () => {
+    // Thu 2026-10-29 09:30 EDT = 13:30Z
+    expect(isMarketOpen(d("2026-10-29T13:29:00Z"), "us")).toBe(false);
+    expect(isMarketOpen(d("2026-10-29T13:30:00Z"), "us")).toBe(true);
+    // Thu 2026-11-12 09:30 EST = 14:30Z
+    expect(isMarketOpen(d("2026-11-12T14:00:00Z"), "us")).toBe(false);
+    expect(isMarketOpen(d("2026-11-12T20:59:00Z"), "us")).toBe(true);
+    expect(isMarketOpen(d("2026-11-12T21:00:00Z"), "us")).toBe(false);
+  });
+  it("closes for the Tokyo and Hong Kong lunch breaks", () => {
+    // Thu 2026-10-29 11:45 JST = 02:45Z; 13:00 JST = 04:00Z
+    expect(isMarketOpen(d("2026-10-29T02:45:00Z"), "jp")).toBe(false);
+    expect(isMarketOpen(d("2026-10-29T04:00:00Z"), "jp")).toBe(true);
+    // 12:30 HKT = 04:30Z; 13:00 HKT = 05:00Z
+    expect(isMarketOpen(d("2026-10-29T04:30:00Z"), "hk")).toBe(false);
+    expect(isMarketOpen(d("2026-10-29T05:00:00Z"), "hk")).toBe(true);
+  });
+  it("is closed at weekends and labels times in the market's zone", () => {
+    expect(isMarketOpen(d("2026-10-31T12:00:00Z"), "uk")).toBe(false); // Saturday
+    const s = getMarketStatus(d("2026-10-29T13:00:00Z"), "us"); // 09:00 EDT
+    expect(s.open).toBe(false);
+    expect(s.label).toBe("Opens 09:30 EDT");
+    expect(s.holiday).toBeNull();
+    expect(getMarketStatus(d("2026-10-29T03:00:00Z"), "jp").label).toBe("Opens 12:30 JST");
+  });
+});

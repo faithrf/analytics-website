@@ -1,21 +1,22 @@
 import type { NextRequest } from "next/server";
-import { ASX200_BY_CODE } from "@/data/asx200";
-import { ApiError, CODE_RE, respond } from "@/lib/api";
+import { CONSTITUENT_BY_ID } from "@/data/markets";
+import { ApiError, respond } from "@/lib/api";
+import { displayCode, isValidId, marketOf, toYahoo } from "@/lib/symbols";
 import { getProfile, getQuote } from "@/lib/yahoo";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/stock/BHP - quote, key stats and sector. 404 for unknown tickers. */
+/** GET /api/stock/BHP or /api/stock/AAPL.US - quote, key stats and sector. 404 for unknown tickers. */
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ code: string }> }) {
   return respond(async () => {
-    const code = (await ctx.params).code.toUpperCase();
-    if (!CODE_RE.test(code)) throw new ApiError(400, "bad_request", "Invalid ASX code.");
-    const symbol = `${code}.AX`;
+    const id = decodeURIComponent((await ctx.params).code).toUpperCase();
+    if (!isValidId(id)) throw new ApiError(400, "bad_request", "Invalid stock code.");
+    const symbol = toYahoo(id);
     const quote = await getQuote(symbol);
     if (!quote || quote.price === null) {
-      throw new ApiError(404, "not_found", `No ASX stock found for "${code}".`);
+      throw new ApiError(404, "not_found", `No ${marketOf(id)} stock found for "${displayCode(id)}".`);
     }
-    const known = ASX200_BY_CODE.get(code);
+    const known = CONSTITUENT_BY_ID.get(id);
     const profile = await getProfile(symbol);
     return { quote, sector: known?.sector ?? profile.sector, industry: profile.industry };
   });

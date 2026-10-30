@@ -1,23 +1,22 @@
-import { respond } from "@/lib/api";
+import type { NextRequest } from "next/server";
+import { ApiError, respond } from "@/lib/api";
+import { isRegion, region } from "@/lib/markets";
 import { getChart, getQuotes } from "@/lib/yahoo";
 
 export const dynamic = "force-dynamic";
 
-const OVERVIEW = [
-  { symbol: "^AXJO", label: "ASX 200" },
-  { symbol: "^AORD", label: "All Ordinaries" },
-  { symbol: "AUDUSD=X", label: "AUD/USD" },
-] as const;
-
-/** GET /api/overview - index and FX quotes with an intraday sparkline each. */
-export async function GET() {
+/** GET /api/overview?region=us - index and FX quotes with an intraday sparkline each (default region au). */
+export async function GET(req: NextRequest) {
   return respond(async () => {
-    const symbols = OVERVIEW.map((o) => o.symbol);
+    const id = req.nextUrl.searchParams.get("region") ?? "au";
+    if (!isRegion(id)) throw new ApiError(400, "bad_request", "Unknown region.");
+    const tilesDef = region(id).tiles;
+    const symbols = tilesDef.map((o) => o.symbol);
     const [{ quotes }, charts] = await Promise.all([
       getQuotes(symbols),
       Promise.allSettled(symbols.map((s) => getChart(s, "1D"))),
     ]);
-    const tiles = OVERVIEW.map((o, i) => {
+    const tiles = tilesDef.map((o, i) => {
       const chart = charts[i];
       return {
         label: o.label,

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { MIN_ACTIVE_VOLUME, calcChange, rankMovers, sectorAverages, type Constituent, type MoverRow } from "@/lib/aggregate";
 import { direction, fmtPct, fmtSigned } from "@/lib/format";
 import { keepLastSessions } from "@/lib/ranges";
-import { parseWatchlist } from "@/lib/watchlist";
 
 describe("calcChange", () => {
   it("computes change and percent", () => {
@@ -110,16 +109,5 @@ describe("keepLastSessions", () => {
     ];
     expect(keepLastSessions(pts, 1)).toHaveLength(1);
     expect(keepLastSessions(pts, 2)).toHaveLength(3);
-  });
-});
-
-describe("parseWatchlist", () => {
-  it("accepts valid codes, drops junk and duplicates", () => {
-    expect(parseWatchlist('["BHP","CBA","BHP","bad code",5]')).toEqual(["BHP", "CBA"]);
-  });
-  it("survives bad input", () => {
-    expect(parseWatchlist(null)).toEqual([]);
-    expect(parseWatchlist("{not json")).toEqual([]);
-    expect(parseWatchlist('{"a":1}')).toEqual([]);
   });
 });

@@ -7,13 +7,13 @@ import { Footer } from "@/components/Footer";
 const body = Instrument_Sans({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Bellwether - ASX dashboard",
-  description: "Open-source ASX market dashboard: indices, movers, sectors, charts and a local watchlist.",
+  title: "Bellwether - market dashboard",
+  description: "Open-source market dashboard for the ASX, US, UK, Europe, Japan and Hong Kong: indices, movers, sectors, charts and pinned dashboards.",
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
-const themeScript = `try{var t=localStorage.getItem('asx-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}`;
+const themeScript = `try{var t=localStorage.getItem('asx-theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.dataset.theme=t;}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

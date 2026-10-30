@@ -9,22 +9,32 @@
  * Day, Melbourne Cup) do not close the ASX. Not modelled: the ASX pre-open and
  * closing auction sessions, which run outside 10:00-16:00.
  */
+import { region, type RegionId } from "@/lib/markets";
+
 export const ASX_TIME_ZONE = "Australia/Sydney";
 export const OPEN_MINUTES = 10 * 60;
 export const CLOSE_MINUTES = 16 * 60;
 
 export const EARLY_CLOSE_MINUTES = 14 * 60 + 10;
 
-const partsFormatter = new Intl.DateTimeFormat("en-AU", {
-  timeZone: ASX_TIME_ZONE,
-  year: "numeric",
-  month: "numeric",
-  day: "numeric",
-  weekday: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-});
+const partsFormatters = new Map<string, Intl.DateTimeFormat>();
+function partsFormatter(tz: string): Intl.DateTimeFormat {
+  let f = partsFormatters.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-AU", {
+      timeZone: tz,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
+    partsFormatters.set(tz, f);
+  }
+  return f;
+}
 
 const WEEKDAYS: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 
@@ -39,13 +49,18 @@ export interface SydneyClock {
 }
 
 export function sydneyClock(date: Date): SydneyClock {
+  return clockIn(ASX_TIME_ZONE, date);
+}
+
+/** Wall-clock parts for any IANA time zone. */
+export function clockIn(tz: string, date: Date): SydneyClock {
   let weekday = 0;
   let hour = 0;
   let minute = 0;
   let year = 0;
   let month = 0;
   let day = 0;
-  for (const p of partsFormatter.formatToParts(date)) {
+  for (const p of partsFormatter(tz).formatToParts(date)) {
     if (p.type === "weekday") weekday = WEEKDAYS[p.value.slice(0, 3)] ?? 0;
     else if (p.type === "hour") hour = Number(p.value) % 24;
     else if (p.type === "minute") minute = Number(p.value);
@@ -161,21 +176,30 @@ export function holidayAt(date: Date): string | null {
   return holidayName(c.year, c.month, c.day);
 }
 
-export function isMarketOpen(date: Date = new Date()): boolean {
-  const c = sydneyClock(date);
+/**
+ * Other markets use their regular session and midday break on weekdays only:
+ * their public holidays are not modelled.
+ */
+export function isMarketOpen(date: Date = new Date(), regionId: RegionId = "au"): boolean {
+  const r = region(regionId);
+  const c = clockIn(r.tz, date);
   if (c.weekday === 0 || c.weekday === 6) return false;
-  if (holidayName(c.year, c.month, c.day)) return false;
-  return c.minutes >= OPEN_MINUTES && c.minutes < closeMinutesFor(c);
+  if (regionId === "au") {
+    if (holidayName(c.year, c.month, c.day)) return false;
+    return c.minutes >= OPEN_MINUTES && c.minutes < closeMinutesFor(c);
+  }
+  if (r.lunch && c.minutes >= r.lunch[0] && c.minutes < r.lunch[1]) return false;
+  return c.minutes >= r.open && c.minutes < r.close;
 }
 
 const STEP_MS = 5 * 60_000;
 
 /** Next instant (15-minute resolution) at which open/closed flips. */
-export function nextTransition(date: Date = new Date()): Date {
-  const current = isMarketOpen(date);
+export function nextTransition(date: Date = new Date(), regionId: RegionId = "au"): Date {
+  const current = isMarketOpen(date, regionId);
   let t = Math.floor(date.getTime() / STEP_MS) * STEP_MS + STEP_MS;
   for (let i = 0; i < 24 * 12 * 10; i++, t += STEP_MS) {
-    if (isMarketOpen(new Date(t)) !== current) return new Date(t);
+    if (isMarketOpen(new Date(t), regionId) !== current) return new Date(t);
   }
   return new Date(t);
 }
@@ -189,20 +213,21 @@ export interface MarketStatus {
   holiday: string | null;
 }
 
-export function getMarketStatus(date: Date = new Date()): MarketStatus {
-  const open = isMarketOpen(date);
-  const next = nextTransition(date);
-  const day = new Intl.DateTimeFormat("en-AU", { timeZone: ASX_TIME_ZONE, weekday: "short" }).format(next);
-  const time = new Intl.DateTimeFormat("en-AU", {
-    timeZone: ASX_TIME_ZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    timeZoneName: "short",
-  }).format(next);
-  const sameDay = sydneyClock(next).weekday === sydneyClock(date).weekday && next.getTime() - date.getTime() < 864e5;
+export function getMarketStatus(date: Date = new Date(), regionId: RegionId = "au"): MarketStatus {
+  const r = region(regionId);
+  const open = isMarketOpen(date, regionId);
+  const next = nextTransition(date, regionId);
+  const day = new Intl.DateTimeFormat("en-AU", { timeZone: r.tz, weekday: "short" }).format(next);
+  const hhmm = new Intl.DateTimeFormat("en-AU", { timeZone: r.tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(next);
+  // en-AU spells most foreign zones as "GMT+9"; each market's own locale gives "JST", "EDT" and so on.
+  const zone =
+    new Intl.DateTimeFormat(r.zoneLocale, { timeZone: r.tz, timeZoneName: "short" })
+      .formatToParts(next)
+      .find((p) => p.type === "timeZoneName")?.value ?? "";
+  const time = zone ? `${hhmm} ${zone}` : hhmm;
+  const sameDay = clockIn(r.tz, next).weekday === clockIn(r.tz, date).weekday && next.getTime() - date.getTime() < 864e5;
   const when = sameDay ? time : `${day} ${time}`;
-  const holiday = holidayAt(date);
+  const holiday = regionId === "au" ? holidayAt(date) : null;
   const base = open ? `Closes ${when}` : `Opens ${when}`;
-  return { open, next, holiday, label: holiday ? `Closed \u2014 ${holiday}. ${base}` : base };
+  return { open, next, holiday, label: holiday ? `Closed — ${holiday}. ${base}` : base };
 }

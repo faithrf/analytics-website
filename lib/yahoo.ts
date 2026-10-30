@@ -3,6 +3,7 @@ import YahooFinance from "yahoo-finance2";
 import { TtlCache } from "@/lib/cache";
 import { keepLastSessions, rangeParams, rangeTtlMs, type Range } from "@/lib/ranges";
 import { calcChange } from "@/lib/aggregate";
+import { displayCode, fromYahoo, isValidId, marketOf } from "@/lib/symbols";
 
 /* ---------- config ---------- */
 
@@ -22,15 +23,18 @@ interface Shared {
   quotes: TtlCache<QuoteDTO>;
   charts: TtlCache<ChartDTO>;
   news: TtlCache<NewsItem[]>;
+  marketNews: TtlCache<MarketNewsItem[]>;
   search: TtlCache<SearchHit[]>;
   profiles: TtlCache<Profile>;
 }
-const g = globalThis as unknown as { __asx?: Shared };
-const shared: Shared = (g.__asx ??= {
+const g = globalThis as unknown as { __asx2?: Shared };
+// Bump the key when Shared gains a field, so a dev server keeps no stale shape across HMR.
+const shared: Shared = (g.__asx2 ??= {
   yf: new YahooFinance({ suppressNotices: ["yahooSurvey"] }),
   quotes: new TtlCache<QuoteDTO>(1000),
   charts: new TtlCache<ChartDTO>(300),
   news: new TtlCache<NewsItem[]>(300),
+  marketNews: new TtlCache<MarketNewsItem[]>(50),
   search: new TtlCache<SearchHit[]>(300),
   profiles: new TtlCache<Profile>(500),
 });
@@ -41,6 +45,7 @@ const OPTS = { validateResult: false } as const;
 
 export interface QuoteDTO {
   symbol: string;
+  /** stock id ("BHP", "AAPL.US"); indices and FX keep their Yahoo symbol */
   code: string;
   name: string;
   price: number | null;
@@ -80,7 +85,10 @@ export interface NewsItem {
   time: number | null;
 }
 export interface SearchHit {
+  /** stock id, see lib/symbols.ts */
+  id: string;
   code: string;
+  market: string;
   symbol: string;
   name: string;
   type: string;
@@ -110,7 +118,7 @@ export function mapQuote(r: Raw): QuoteDTO {
   const dy = num(r.dividendYield) ?? (num(r.trailingAnnualDividendYield) !== null ? num(r.trailingAnnualDividendYield)! * 100 : null);
   return {
     symbol,
-    code: symbol.replace(/\.AX$/, ""),
+    code: fromYahoo(symbol),
     name: str(r.longName) ?? str(r.shortName) ?? symbol,
     price,
     change: num(r.regularMarketChange) ?? derived.change,
@@ -234,9 +242,9 @@ export async function getNews(symbol: string): Promise<NewsItem[]> {
     NEWS_TTL,
     async () => {
       // Yahoo's news search returns nothing for "BHP.AX"; "ASX:BHP" works.
-      const code = symbol.replace(/\.AX$/, "");
+      const terms = symbol.endsWith(".AX") ? [`ASX:${symbol.slice(0, -3)}`, symbol.slice(0, -3)] : [symbol];
       let news: Raw[] = [];
-      for (const term of [`ASX:${code}`, code]) {
+      for (const term of terms) {
         const res = (await yf.search(term, { quotesCount: 0, newsCount: 10 }, OPTS)) as unknown as { news?: Raw[] };
         news = res.news ?? [];
         if (news.length > 0) break;
@@ -254,7 +262,45 @@ export async function getNews(symbol: string): Promise<NewsItem[]> {
   );
 }
 
-export async function searchAsx(query: string): Promise<SearchHit[]> {
+export interface MarketNewsItem extends NewsItem {
+  /** Yahoo symbols Yahoo links to the story */
+  tickers: string[];
+}
+
+const TICKER_RE = /^[A-Z0-9.^=-]{1,14}$/;
+
+/** Headlines for one search term, with the tickers Yahoo tags them with. */
+export async function getTermNews(term: string): Promise<MarketNewsItem[]> {
+  return shared.marketNews.getOrLoad(
+    term,
+    NEWS_TTL,
+    async () => {
+      const res = (await yf.search(term, { quotesCount: 0, newsCount: 12 }, OPTS)) as unknown as { news?: Raw[] };
+      return (res.news ?? [])
+        .map((n) => ({
+          title: str(n.title) ?? "",
+          publisher: str(n.publisher) ?? "",
+          link: str(n.link) ?? "",
+          time: toMs(n.providerPublishTime),
+          tickers: [
+            ...new Set(
+              (Array.isArray(n.relatedTickers) ? n.relatedTickers : []).filter(
+                (t): t is string => typeof t === "string" && TICKER_RE.test(t),
+              ),
+            ),
+          ].slice(0, 8),
+        }))
+        .filter((n) => n.title && /^https?:\/\//.test(n.link));
+    },
+    { staleOnError: true },
+  );
+}
+
+/** Yahoo exchange codes for the US listings we accept (others, e.g. OTC, are dropped). */
+const US_EXCHANGES = new Set(["NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS", "NAS"]);
+
+/** Equities and ETFs on the markets in lib/markets.ts. */
+export async function searchStocks(query: string): Promise<SearchHit[]> {
   const q = query.trim().toLowerCase();
   return shared.search.getOrLoad(
     q,
@@ -264,17 +310,21 @@ export async function searchAsx(query: string): Promise<SearchHit[]> {
       const hits: SearchHit[] = [];
       for (const r of res.quotes ?? []) {
         const symbol = str(r.symbol);
-        if (!symbol || !symbol.endsWith(".AX")) continue;
         const type = str(r.quoteType) ?? "";
-        if (type !== "EQUITY" && type !== "ETF") continue;
+        if (!symbol || (type !== "EQUITY" && type !== "ETF")) continue;
+        if (!symbol.includes(".") && !US_EXCHANGES.has(str(r.exchange) ?? "")) continue;
+        const id = fromYahoo(symbol);
+        if (!isValidId(id)) continue;
         hits.push({
+          id,
           symbol,
-          code: symbol.slice(0, -3),
+          code: displayCode(id),
+          market: marketOf(id),
           name: str(r.longname) ?? str(r.shortname) ?? symbol,
           type,
         });
       }
-      return hits.slice(0, 8);
+      return hits.slice(0, 10);
     },
     { staleOnError: true },
   );

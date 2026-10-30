@@ -1,33 +1,34 @@
 @import "tailwindcss";
 
-/* Dark is the default; light is opt-in through html[data-theme="light"]. */
+/* Navy dark is the default; light is opt-in through html[data-theme="light"].
+   With no saved choice, the inline script in layout.tsx follows the OS setting. */
 :root {
-  --bg: #0b1513;
-  --panel: #12201d;
-  --panel-2: #182a26;
-  --line: #24403a;
-  --text: #e4ede9;
-  --muted: #93aaa3;
-  --accent: #e8b94c;
-  --accent-ink: #1a1405;
-  --gain: #4ad6a0;
-  --loss: #ff8076;
-  --focus: #e8b94c;
+  --bg: #0a1222;
+  --panel: #0f1a2e;
+  --panel-2: #15233b;
+  --line: #22324f;
+  --text: #e3e9f3;
+  --muted: #8b9ab3;
+  --accent: #4f8cff;
+  --accent-ink: #06122a;
+  --gain: #26c6a0;
+  --loss: #ff6b6b;
+  --focus: #7aa7ff;
   color-scheme: dark;
 }
 
 html[data-theme="light"] {
-  --bg: #eef2ee;
+  --bg: #f0f3fa;
   --panel: #ffffff;
-  --panel-2: #f2f6f3;
-  --line: #d3ddd6;
-  --text: #14211d;
-  --muted: #556862;
-  --accent: #9a6a00;
+  --panel-2: #f5f7fb;
+  --line: #dde3ee;
+  --text: #131722;
+  --muted: #5b6478;
+  --accent: #2962ff;
   --accent-ink: #ffffff;
-  --gain: #0a7a50;
-  --loss: #b8312a;
-  --focus: #9a6a00;
+  --gain: #067a5b;
+  --loss: #d12f3c;
+  --focus: #2962ff;
   color-scheme: light;
 }
 

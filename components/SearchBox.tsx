@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import type { SearchHit } from "@/lib/yahoo";
+import { isValidId } from "@/lib/symbols";
 
 type Status = "idle" | "loading" | "done" | "error";
 
@@ -52,6 +53,23 @@ export function SearchBox() {
     router.push(`/stock/${code}`);
   };
 
+  // Enter before suggestions arrive: search now and open the best match, so a
+  // company name works and a code like "WISE" is not assumed to be on the ASX.
+  const searchNow = async () => {
+    setStatus("loading");
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const body = (await res.json()) as { results: SearchHit[] };
+      if (body.results[0]) return go(body.results[0].id);
+      setHits([]);
+      setStatus("done");
+    } catch {
+      if (isValidId(query.toUpperCase())) return go(query.toUpperCase());
+      setStatus("error");
+    }
+  };
+
   const showList = open && query.length > 0;
   const shown = query ? hits : [];
 
@@ -75,16 +93,16 @@ export function SearchBox() {
             setOpen(false);
           } else if (e.key === "Enter") {
             e.preventDefault();
-            if (shown[active]) go(shown[active].code);
-            else if (/^[A-Za-z0-9]{1,6}$/.test(query)) go(query.toUpperCase());
+            if (shown[active]) go(shown[active].id);
+            else void searchNow();
           }
         }}
         role="combobox"
         aria-expanded={showList}
         aria-controls={listId}
         aria-autocomplete="list"
-        aria-label="Search ASX stocks"
-        placeholder="Search ASX stocks, e.g. BHP or Commonwealth"
+        aria-label="Search stocks"
+        placeholder="Search by company name or code, e.g. Commonwealth Bank, Apple, 7203"
         className="h-8 w-full rounded-md border border-line bg-bg px-3 text-sm outline-none placeholder:text-muted focus:border-accent"
       />
       {showList && (
@@ -95,24 +113,26 @@ export function SearchBox() {
         >
           {status === "loading" && shown.length === 0 && <li className="px-3 py-2 text-sm text-muted">Searching...</li>}
           {status === "error" && (
-            <li className="px-3 py-2 text-sm text-muted">Search is unavailable right now. Press Enter to open a code directly.</li>
+            <li className="px-3 py-2 text-sm text-muted">Search is unavailable right now. Type a full code such as BHP or AAPL.US and press Enter.</li>
           )}
-          {status === "done" && shown.length === 0 && <li className="px-3 py-2 text-sm text-muted">No ASX matches for &ldquo;{query}&rdquo;.</li>}
+          {status === "done" && shown.length === 0 && <li className="px-3 py-2 text-sm text-muted">No matches for &ldquo;{query}&rdquo;.</li>}
           {shown.map((h, i) => (
             <li
-              key={h.symbol}
+              key={h.id}
               role="option"
               aria-selected={i === active}
               onMouseEnter={() => setActive(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
-                go(h.code);
+                go(h.id);
               }}
               className={`flex cursor-pointer items-center gap-3 px-3 py-1.5 text-sm ${i === active ? "bg-panel2" : ""}`}
             >
-              <span className="w-14 font-semibold text-accent">{h.code}</span>
+              <span className="w-16 truncate font-semibold text-accent">{h.code}</span>
               <span className="min-w-0 flex-1 truncate">{h.name}</span>
-              <span className="text-xs text-muted">{h.type === "ETF" ? "ETF" : "Stock"}</span>
+              <span className="w-20 text-right text-xs text-muted">
+                {h.market} {h.type === "ETF" ? "ETF" : "stock"}
+              </span>
             </li>
           ))}
         </ul>
