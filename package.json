@@ -13,6 +13,7 @@
     "verify-tickers": "tsx scripts/verify-tickers.ts"
   },
   "dependencies": {
+    "@upstash/redis": "^1.40.0",
     "next": "^16.4.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

@@ -17,6 +17,7 @@ import {
   QuoteTime,
 } from "@/components/ui";
 import { Sparkline } from "@/components/Sparkline";
+import { SyncMenu } from "@/components/SyncMenu";
 
 type Spark = { points: { t: number; v: number }[]; prevClose: number | null };
 
@@ -123,6 +124,7 @@ export function BoardsView() {
           )
         )}
         <div className="ml-auto flex items-center gap-2">
+          <SyncMenu />
           {confirmDelete ? (
             <>
               <span className="text-xs">
