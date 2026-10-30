@@ -1,8 +1,8 @@
-# Bellwether - market dashboard
+# Meridian - market dashboard
 
 An open-source, no-login market dashboard for the ASX, US, UK, Europe, Japan and Hong Kong. It runs on one screen (built for 1600x900), has navy dark and light themes (it follows your system setting until you pick one with the header toggle), and keeps your dashboards in your own browser.
 
-![Bellwether home page](docs/screenshot.png)
+![Meridian home page](docs/screenshot.png)
 
 ## Features
 
@@ -18,7 +18,7 @@ An open-source, no-login market dashboard for the ASX, US, UK, Europe, Japan and
 
 ## Stack
 
-Next.js (App Router, TypeScript), Tailwind CSS, Recharts, [`yahoo-finance2`](https://github.com/gadicc/yahoo-finance2) (server-side only, from `app/api/*` route handlers), Vitest. No database: an in-memory TTL cache (60s for quotes, 10 minutes for long-range history, 15 minutes for news and search) keeps Yahoo traffic low.
+Next.js (App Router, TypeScript), Tailwind CSS, Recharts, [`yahoo-finance2`](https://github.com/gadicc/yahoo-finance2) (server-side only, from `app/api/*` route handlers), Vitest. No database: an in-memory TTL cache (60s for quotes, 10 minutes for long-range history, 5 minutes for news and search) keeps Yahoo traffic low.
 
 ## Setup
 

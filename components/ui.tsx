@@ -1,5 +1,5 @@
 "use client";
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { direction, fmtPct, fmtSigned } from "@/lib/format";
 import type { ApiErr } from "@/lib/use-api";
 
@@ -240,21 +240,40 @@ export function Freshness({
   kind?: "prices" | "news" | "chart";
 }) {
   const now = useNow();
+  // manual refresh feedback: spin until new data lands (at least briefly), then confirm
+  const [clickedAt, setClickedAt] = useState(0);
+  const [minSpin, setMinSpin] = useState(false);
   if (!now || !updatedAt) return <span className="h-4 w-24" aria-hidden />;
+  const waiting = clickedAt > 0 && updatedAt < clickedAt && !stale;
+  const spinning = minSpin || waiting;
+  const done = clickedAt > 0 && !spinning;
+  const refresh = () => {
+    setClickedAt(Date.now());
+    setMinSpin(true);
+    setTimeout(() => setMinSpin(false), 700);
+    setTimeout(() => setClickedAt(0), 4000);
+    onRefresh?.();
+  };
   const label =
-    kind === "news" ? "Latest story" : kind === "chart" ? "Chart to" : "Prices";
+    kind === "news"
+      ? "Newest story"
+      : kind === "chart"
+        ? "Chart to"
+        : "Last trade";
+  const cacheFor =
+    kind === "news" ? "5 min" : kind === "chart" ? "10 min" : "60 s";
   const lines = [
     dataTime
       ? kind === "news"
         ? `Newest story published ${whenLong(dataTime)} (your time).`
         : `Last trade in this data: ${whenLong(dataTime)} (your time). Source: Yahoo Finance; free quotes can lag the exchange by up to 15-20 min.`
       : "The source did not give a time for this data.",
-    `This page last fetched it ${agoShort(updatedAt, now)} (${whenLong(updatedAt)}). The server reuses a fetch for up to ${kind === "news" ? "15 min" : kind === "chart" ? "10 min" : "60 s"}.`,
+    `Checked: this page last asked the server at ${whenLong(updatedAt)}. The server re-asks Yahoo at most every ${cacheFor}, so a refresh can return the same data.`,
     refreshMs > 0
-      ? `Auto-refreshing every ${Math.round(refreshMs / 1000)} s while the market is open.`
+      ? `Auto-refreshing every ${Math.round(refreshMs / 1000)} s${kind === "news" ? "" : " while the market is open"}.`
       : kind === "news"
         ? "Not auto-refreshing right now."
-        : "Market closed, so not auto-refreshing: prices are from the last session.",
+        : "Market closed, so not auto-refreshing: the last trade is from the last session.",
     stale
       ? "The last refresh failed, so you are seeing the previous data."
       : "",
@@ -270,17 +289,23 @@ export function Freshness({
         {dataTime
           ? `${label} ${whenShort(dataTime, now)}`
           : `${label} time unknown`}
-        <span className="hidden xl:inline">
-          {" "}
-          · checked {agoShort(updatedAt, now)}
-        </span>
+        {" · "}
+        {spinning ? (
+          "checking…"
+        ) : done ? (
+          <span className="text-gain">
+            checked {whenShort(updatedAt, now)} ✓
+          </span>
+        ) : (
+          `checked ${whenShort(updatedAt, now)}`
+        )}
         {stale && <span className="text-loss"> · refresh failed</span>}
       </span>
       {onRefresh && (
         <svg
           aria-hidden
           viewBox="0 0 24 24"
-          className="size-3 shrink-0"
+          className={`size-3 shrink-0 ${spinning ? "animate-spin" : ""}`}
           fill="none"
           stroke="currentColor"
           strokeWidth={2.2}
@@ -299,9 +324,11 @@ export function Freshness({
   return onRefresh ? (
     <button
       type="button"
-      onClick={onRefresh}
+      onClick={refresh}
+      disabled={spinning}
+      aria-busy={spinning}
       title={lines.join(NL)}
-      className={`${cls} rounded hover:text-accent`}
+      className={`${cls} rounded hover:text-accent disabled:cursor-wait`}
     >
       {body}
     </button>

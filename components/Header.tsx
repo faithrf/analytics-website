@@ -108,7 +108,7 @@ export function Header() {
   return (
     <header className="flex h-12 shrink-0 items-center gap-4 border-b border-line bg-panel px-3">
       <Link href="/" className="flex items-baseline gap-2 whitespace-nowrap">
-        <span className="text-base font-bold tracking-tight">Bellwether</span>
+        <span className="text-base font-bold tracking-tight">Meridian</span>
       </Link>
       <nav aria-label="Main" className="flex items-center gap-1">
         <NavLink href="/">Markets</NavLink>

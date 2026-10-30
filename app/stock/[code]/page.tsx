@@ -11,7 +11,7 @@ const toId = (raw: string) => {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { code } = await params;
-  return { title: `${displayCode(toId(code))} - Bellwether` };
+  return { title: `${displayCode(toId(code))} - Meridian` };
 }
 
 export default async function StockPage({ params }: Props) {

@@ -295,7 +295,7 @@ function BoardGrid({
                 ) : (
                   <span className="text-xs text-muted">No quote</span>
                 )}
-                <div className="h-12 w-1/2 min-w-0">
+                <div className="h-14 w-1/2 min-w-0">
                   {spark ? (
                     <Sparkline
                       data={spark.points}

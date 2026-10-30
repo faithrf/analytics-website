@@ -7,7 +7,7 @@ import { Footer } from "@/components/Footer";
 const body = Instrument_Sans({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Bellwether - market dashboard",
+  title: "Meridian - market dashboard",
   description: "Open-source market dashboard for the ASX, US, UK, Europe, Japan and Hong Kong: indices, movers, sectors, charts and pinned dashboards.",
 };
 

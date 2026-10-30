@@ -4,6 +4,7 @@ import { isValidId } from "@/lib/symbols";
  * Dashboards ("boards") of pinned stocks, kept in localStorage. Everything here
  * is pure so it can be unit tested; lib/use-boards.ts wires it to storage.
  */
+/** Named after the app's old name; kept so saved pins survive the rename. */
 export const BOARDS_KEY = "bellwether-boards-v1";
 /** The single watchlist from before dashboards existed; migrated once. */
 export const LEGACY_WATCHLIST_KEY = "asx-watchlist-v1";

@@ -13,7 +13,7 @@ const seconds = (name: string, fallback: number) => {
 };
 const QUOTE_TTL = seconds("QUOTE_TTL_SECONDS", 60);
 const HISTORY_TTL_S = Number(process.env.HISTORY_TTL_SECONDS) > 0 ? Number(process.env.HISTORY_TTL_SECONDS) : 600;
-const NEWS_TTL = seconds("NEWS_TTL_SECONDS", 900);
+const NEWS_TTL = seconds("NEWS_TTL_SECONDS", 300);
 const PROFILE_TTL = 24 * 3600_000;
 
 /* ---------- shared singletons (survive dev HMR) ---------- */
