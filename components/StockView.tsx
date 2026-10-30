@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import type { ChartDTO, NewsItem, QuoteDTO } from "@/lib/yahoo";
+import type { ChartDTO, NewsItem, QuoteDTO, StockDetails } from "@/lib/yahoo";
 import { RANGES, type Range } from "@/lib/ranges";
 import {
   direction,
@@ -28,13 +28,17 @@ import { displayCode, marketOf, regionOf, toYahoo } from "@/lib/symbols";
 
 interface StockData {
   quote: QuoteDTO;
+  details: StockDetails;
   sector: string | null;
   industry: string | null;
 }
 
 const RANGE_TABS = RANGES.map((r) => ({ id: r, label: r }));
 const SIDE_TABS = [
-  { id: "stats", label: "Key stats" },
+  { id: "stats", label: "Stats" },
+  { id: "financials", label: "Financials" },
+  { id: "analysts", label: "Analysts" },
+  { id: "profile", label: "Profile" },
   { id: "news", label: "News" },
 ] as const;
 type SideTab = (typeof SIDE_TABS)[number]["id"];
@@ -182,10 +186,18 @@ export function StockView({ code }: { code: string }) {
               />
             )}
           </div>
-          {side === "stats" ? (
-            <Stats data={stock.data} />
-          ) : (
+          {side === "news" ? (
             <News code={code} />
+          ) : !stock.data ? (
+            <StatsSkeleton />
+          ) : side === "stats" ? (
+            <Stats data={stock.data} />
+          ) : side === "financials" ? (
+            <Financials details={stock.data.details} />
+          ) : side === "analysts" ? (
+            <Analysts details={stock.data.details} quote={stock.data.quote} />
+          ) : (
+            <Profile data={stock.data} />
           )}
         </Panel>
       </div>
@@ -232,21 +244,61 @@ function RangeBar({
   );
 }
 
-function Stats({ data }: { data?: StockData }) {
-  if (!data) {
-    return (
-      <div className="space-y-3 p-3">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-5 w-full" />
-        ))}
-      </div>
-    );
-  }
-  const { quote: q } = data;
+function StatsSkeleton() {
+  return (
+    <div className="space-y-3 p-3">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <Skeleton key={i} className="h-5 w-full" />
+      ))}
+    </div>
+  );
+}
+
+/** A row that disappears when Yahoo has no value, instead of showing a dash. */
+function OptRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode | null | undefined;
+}) {
+  if (children === null || children === undefined || children === false)
+    return null;
+  return <Row label={label}>{children}</Row>;
+}
+
+/** Small muted uppercase heading that groups rows. */
+function SubHead({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="border-b border-line/60 bg-panel2/50 px-3 py-1 text-[11px] font-semibold tracking-wide text-muted uppercase">
+      {children}
+    </h3>
+  );
+}
+
+const dateFmt = new Intl.DateTimeFormat("en-AU", {
+  timeZone: "Australia/Sydney",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+const fmtDate = (ms: number | null) =>
+  isNum(ms) ? dateFmt.format(new Date(ms)) : null;
+const num2 = (n: number | null, digits = 2) =>
+  isNum(n) ? fmtNum(n, digits) : null;
+/** Fraction (0.12) as a percent string. */
+const pctOf = (n: number | null) =>
+  isNum(n) ? `${fmtNum(n * 100, 1)}%` : null;
+const compact = (n: number | null) => (isNum(n) ? fmtCompact(n) : null);
+
+function Stats({ data }: { data: StockData }) {
+  const { quote: q, details: d } = data;
+  const { valuation: v, dividends: dv, ownership: o } = d;
   const volRatio =
     isNum(q.volume) && isNum(q.avgVolume) && q.avgVolume > 0
       ? q.volume / q.avgVolume
       : null;
+  const dp = priceDigits(q.price);
   return (
     <dl>
       <Row label="Market cap">
@@ -255,9 +307,21 @@ function Stats({ data }: { data?: StockData }) {
           : "—"}
       </Row>
       <Row label="P/E (trailing)">{fmtNum(q.pe)}</Row>
+      <OptRow label="P/E (forward)">{num2(v.forwardPE)}</OptRow>
+      <OptRow label="EPS (ttm / forward)">
+        {isNum(v.trailingEps) || isNum(v.forwardEps)
+          ? `${fmtNum(v.trailingEps)} / ${fmtNum(v.forwardEps)}`
+          : null}
+      </OptRow>
+      <OptRow label="PEG ratio">{num2(v.peg)}</OptRow>
+      <OptRow label="Price / book">{num2(v.priceToBook)}</OptRow>
+      <OptRow label="Beta">{num2(v.beta)}</OptRow>
       <Row label="Dividend yield">
         {isNum(q.dividendYield) ? `${fmtNum(q.dividendYield)}%` : "—"}
       </Row>
+      <OptRow label="Dividend rate">{num2(dv.rate)}</OptRow>
+      <OptRow label="Payout ratio">{pctOf(dv.payoutRatio)}</OptRow>
+      <OptRow label="Ex-dividend date">{fmtDate(dv.exDate)}</OptRow>
       <Row label="52-week range">
         {isNum(q.low52) && isNum(q.high52) ? (
           <RangeBar low={q.low52} high={q.high52} value={q.price} />
@@ -265,6 +329,13 @@ function Stats({ data }: { data?: StockData }) {
           "—"
         )}
       </Row>
+      <OptRow label="52-week change">
+        {isNum(v.change52w) ? (
+          <Change pct={v.change52w * 100} className="font-medium" />
+        ) : null}
+      </OptRow>
+      <OptRow label="50-day average">{num2(v.fiftyDayAvg, dp)}</OptRow>
+      <OptRow label="200-day average">{num2(v.twoHundredDayAvg, dp)}</OptRow>
       <Row label="Day range">
         {isNum(q.dayLow) && isNum(q.dayHigh)
           ? `${fmtNum(q.dayLow)} – ${fmtNum(q.dayHigh)}`
@@ -290,9 +361,289 @@ function Stats({ data }: { data?: StockData }) {
       <Row label="Previous close">
         {fmtNum(q.prevClose, priceDigits(q.prevClose))}
       </Row>
+      <OptRow label="Next earnings">
+        {d.events.earningsDate !== null
+          ? `${fmtDate(d.events.earningsDate)}${d.events.earningsEstimate ? " (est.)" : ""}`
+          : null}
+      </OptRow>
+      <OptRow label="Insider ownership">{pctOf(o.insidersPct)}</OptRow>
+      <OptRow label="Institutional ownership">
+        {pctOf(o.institutionsPct)}
+      </OptRow>
+      <OptRow label="Shares outstanding">{compact(o.sharesOutstanding)}</OptRow>
+      <OptRow label="Float">{compact(o.floatShares)}</OptRow>
       <Row label="Sector">{data.sector ?? "—"}</Row>
       {data.industry && <Row label="Industry">{data.industry}</Row>}
     </dl>
+  );
+}
+
+function Financials({ details: d }: { details: StockDetails }) {
+  const f = d.financials;
+  const groups: { title: string; rows: [string, string | null][] }[] = [
+    {
+      title: "Income",
+      rows: [
+        ["Revenue", compact(f.revenue)],
+        ["Revenue growth", pctOf(f.revenueGrowth)],
+        ["EBITDA", compact(f.ebitda)],
+        ["Net income", compact(f.netIncome)],
+        ["Earnings growth", pctOf(f.earningsGrowth)],
+        ["Operating cash flow", compact(f.operatingCashflow)],
+        ["Free cash flow", compact(f.freeCashflow)],
+      ],
+    },
+    {
+      title: "Margins",
+      rows: [
+        ["Gross margin", pctOf(f.grossMargins)],
+        ["Operating margin", pctOf(f.operatingMargins)],
+        ["Profit margin", pctOf(f.profitMargins)],
+      ],
+    },
+    {
+      title: "Balance sheet",
+      rows: [
+        ["Total cash", compact(f.totalCash)],
+        ["Total debt", compact(f.totalDebt)],
+        [
+          "Debt / equity",
+          isNum(f.debtToEquity) ? `${fmtNum(f.debtToEquity)}%` : null,
+        ],
+        ["Current ratio", num2(f.currentRatio)],
+        ["Quick ratio", num2(f.quickRatio)],
+      ],
+    },
+    {
+      title: "Returns",
+      rows: [
+        ["Return on equity", pctOf(f.roe)],
+        ["Return on assets", pctOf(f.roa)],
+      ],
+    },
+    {
+      title: "Reporting",
+      rows: [
+        ["Latest quarter", fmtDate(f.mostRecentQuarter)],
+        ["Fiscal year end", fmtDate(f.lastFiscalYearEnd)],
+      ],
+    },
+  ];
+  const shown = groups
+    .map((g) => ({ ...g, rows: g.rows.filter(([, v]) => v !== null) }))
+    .filter((g) => g.rows.length > 0);
+  if (shown.length === 0)
+    return (
+      <p className="p-3 text-sm text-muted">No financial data available.</p>
+    );
+  return (
+    <div>
+      {d.financialCurrency && (
+        <p className="border-b border-line/60 px-3 py-1.5 text-xs text-muted">
+          Figures in {d.financialCurrency}
+        </p>
+      )}
+      {shown.map((g) => (
+        <section key={g.title}>
+          <SubHead>{g.title}</SubHead>
+          <dl>
+            {g.rows.map(([label, v]) => (
+              <Row key={label} label={label}>
+                {v}
+              </Row>
+            ))}
+          </dl>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+const TREND_SEGMENTS = [
+  { key: "strongBuy", label: "Strong buy", bar: "bg-gain" },
+  { key: "buy", label: "Buy", bar: "bg-gain/60" },
+  { key: "hold", label: "Hold", bar: "bg-muted/60" },
+  { key: "sell", label: "Sell", bar: "bg-loss/60" },
+  { key: "strongSell", label: "Strong sell", bar: "bg-loss" },
+] as const;
+
+function Analysts({
+  details: d,
+  quote: q,
+}: {
+  details: StockDetails;
+  quote: QuoteDTO;
+}) {
+  const a = d.analysts;
+  const trend = a.trend;
+  const { targetLow: lo, targetHigh: hi, targetMean: mean } = a;
+  const upside =
+    isNum(mean) && isNum(q.price) && q.price > 0
+      ? ((mean - q.price) / q.price) * 100
+      : null;
+  const total = trend
+    ? TREND_SEGMENTS.reduce((n, sg) => n + trend[sg.key], 0)
+    : 0;
+  if (!a.recommendationKey && !isNum(mean) && total === 0)
+    return (
+      <p className="p-3 text-sm text-muted">No analyst coverage available.</p>
+    );
+  const label = a.recommendationKey
+    ? a.recommendationKey
+        .replace(/_/g, " ")
+        .replace(/^./, (c) => c.toUpperCase())
+    : null;
+  // Position of a price along the low-high target bar, clamped to the bar.
+  const at = (v: number | null) =>
+    isNum(v) && isNum(lo) && isNum(hi) && hi > lo
+      ? Math.min(100, Math.max(0, ((v - lo) / (hi - lo)) * 100))
+      : null;
+  const pricePos = at(q.price);
+  const meanPos = at(mean);
+  const dp = priceDigits(q.price);
+  return (
+    <div>
+      <dl>
+        <OptRow label="Consensus">
+          {label && (
+            <span>
+              {label}
+              {isNum(a.recommendationMean) && (
+                <span className="text-muted">
+                  {" "}
+                  ({fmtNum(a.recommendationMean)} of 5
+                  {isNum(a.count) ? `, ${a.count} analysts` : ""})
+                </span>
+              )}
+            </span>
+          )}
+        </OptRow>
+        <OptRow label="Mean target">
+          {isNum(mean) ? (
+            <span>
+              {fmtNum(mean, dp)}
+              {upside !== null && (
+                <Change pct={upside} showValue={false} className="ml-2" />
+              )}
+            </span>
+          ) : null}
+        </OptRow>
+        <OptRow label="Median target">{num2(a.targetMedian, dp)}</OptRow>
+      </dl>
+
+      {pricePos !== null && isNum(lo) && isNum(hi) && (
+        <div className="border-b border-line/60 px-3 py-3">
+          <div className="mb-2 text-xs text-muted">Price target range</div>
+          <div className="relative h-1.5 rounded-full bg-panel2">
+            {meanPos !== null && (
+              <span
+                className="absolute top-1/2 h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-ink"
+                style={{ left: `${meanPos}%` }}
+                aria-hidden
+              />
+            )}
+            <span
+              className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-bg bg-accent"
+              style={{ left: `${pricePos}%` }}
+              aria-hidden
+            />
+          </div>
+          <div className="mt-1.5 flex justify-between text-xs text-muted">
+            <span>Low {fmtNum(lo, dp)}</span>
+            <span>High {fmtNum(hi, dp)}</span>
+          </div>
+          <div className="mt-1 flex items-center gap-3 text-xs text-muted">
+            <span className="inline-flex items-center gap-1">
+              <span className="size-2 rounded-full bg-accent" aria-hidden />
+              Price {fmtNum(q.price, dp)}
+            </span>
+            {isNum(mean) && (
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2.5 w-0.5 bg-ink" aria-hidden />
+                Mean {fmtNum(mean, dp)}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {trend && total > 0 && (
+        <div className="px-3 py-3">
+          <div className="mb-2 text-xs text-muted">Recommendations</div>
+          <div
+            className="flex h-2.5 overflow-hidden rounded-full bg-panel2"
+            role="img"
+            aria-label={TREND_SEGMENTS.map(
+              (sg) => `${sg.label} ${trend[sg.key]}`,
+            ).join(", ")}
+          >
+            {TREND_SEGMENTS.map((sg) =>
+              trend[sg.key] > 0 ? (
+                <span
+                  key={sg.key}
+                  className={sg.bar}
+                  style={{ width: `${(trend[sg.key] / total) * 100}%` }}
+                />
+              ) : null,
+            )}
+          </div>
+          <ul className="mt-2 grid grid-cols-5 gap-1 text-center text-xs">
+            {TREND_SEGMENTS.map((sg) => (
+              <li key={sg.key}>
+                <div className="text-sm font-medium">{trend[sg.key]}</div>
+                <div className="flex items-center justify-center gap-1 text-muted">
+                  <span
+                    className={`size-1.5 shrink-0 rounded-full ${sg.bar}`}
+                    aria-hidden
+                  />
+                  {sg.label}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Profile({ data }: { data: StockData }) {
+  const p = data.details.profile;
+  const where = [p.city, p.country].filter(Boolean).join(", ");
+  return (
+    <div>
+      <dl>
+        <OptRow label="Sector">{data.sector}</OptRow>
+        <OptRow label="Industry">{data.industry}</OptRow>
+        <OptRow label="Location">{where || null}</OptRow>
+        <OptRow label="Employees">
+          {isNum(p.employees) ? p.employees.toLocaleString("en-AU") : null}
+        </OptRow>
+        <OptRow label="Website">
+          {p.website ? (
+            <a
+              href={p.website}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent hover:underline"
+            >
+              {p.website
+                .replace(/^https?:\/\/(www\.)?/i, "")
+                .replace(/\/$/, "")}
+            </a>
+          ) : null}
+        </OptRow>
+      </dl>
+      {p.summary ? (
+        <p className="px-3 py-3 text-sm leading-relaxed whitespace-pre-line">
+          {p.summary}
+        </p>
+      ) : (
+        <p className="p-3 text-sm text-muted">
+          No company description available.
+        </p>
+      )}
+    </div>
   );
 }
 

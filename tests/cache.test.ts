@@ -65,4 +65,39 @@ describe("TtlCache", () => {
     expect(await cache.getOrLoad("k", 1000, loader, { staleOnError: true })).toBe(9);
     await expect(cache.getOrLoad("z", 1000, loader, { staleOnError: true })).rejects.toThrow("down");
   });
+
+  it("serves a stale value at once and refreshes in the background with swrMs", async () => {
+    const c = clock();
+    const cache = new TtlCache<number>(10, c.now);
+    cache.set("k", 1, 1000);
+    c.advance(2000);
+    let resolve!: (v: number) => void;
+    const loader = vi.fn(() => new Promise<number>((r) => (resolve = r)));
+    expect(await cache.getOrLoad("k", 1000, loader, { swrMs: 60_000 })).toBe(1);
+    expect(await cache.getOrLoad("k", 1000, loader, { swrMs: 60_000 })).toBe(1);
+    expect(loader).toHaveBeenCalledTimes(1);
+    resolve(2);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(cache.get("k")).toBe(2);
+  });
+
+  it("waits for the loader once a value is past the swr window", async () => {
+    const c = clock();
+    const cache = new TtlCache<number>(10, c.now);
+    cache.set("k", 1, 1000);
+    c.advance(120_000);
+    expect(await cache.getOrLoad("k", 1000, async () => 3, { swrMs: 60_000 })).toBe(3);
+  });
+
+  it("getWithin serves a value until the grace period after expiry ends", () => {
+    const c = clock();
+    const cache = new TtlCache<number>(10, c.now);
+    cache.set("k", 1, 1000);
+    c.advance(1500);
+    expect(cache.get("k")).toBeUndefined();
+    expect(cache.getWithin("k", 1000)).toBe(1);
+    c.advance(600);
+    expect(cache.getWithin("k", 1000)).toBeUndefined();
+  });
 });

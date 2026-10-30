@@ -243,7 +243,13 @@ export function Freshness({
   // manual refresh feedback: spin until new data lands (at least briefly), then confirm
   const [clickedAt, setClickedAt] = useState(0);
   const [minSpin, setMinSpin] = useState(false);
-  if (!now || !updatedAt) return <span className="h-4 w-24" aria-hidden />;
+  if (!now || !updatedAt)
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap text-muted">
+        <span aria-hidden className="inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-muted" />
+        Loading…
+      </span>
+    );
   const waiting = clickedAt > 0 && updatedAt < clickedAt && !stale;
   const spinning = minSpin || waiting;
   const done = clickedAt > 0 && !spinning;
@@ -356,5 +362,26 @@ export function QuoteTime({
     >
       {whenShort(t, now)}
     </span>
+  );
+}
+
+/** Publish time for a story: clock time plus how long ago, full date on hover. */
+export function StoryTime({
+  t,
+  className = "",
+}: {
+  t: number | null | undefined;
+  className?: string;
+}) {
+  const now = useNow();
+  if (!now || !t) return null;
+  return (
+    <time
+      dateTime={new Date(t).toISOString()}
+      className={`whitespace-nowrap ${className}`}
+      title={`Published ${whenLong(t)} (your time)`}
+    >
+      {whenShort(t, now)} · {agoShort(t, now)}
+    </time>
   );
 }

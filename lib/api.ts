@@ -1,5 +1,15 @@
 import "server-only";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { TtlCache } from "@/lib/cache";
+
+// Background cache refreshes (stale-while-revalidate) finish after the response is sent.
+TtlCache.defer = (task) => {
+  try {
+    after(() => task);
+  } catch {
+    /* outside a request: the promise still runs, just unguarded */
+  }
+};
 
 export class ApiError extends Error {
   constructor(
@@ -36,10 +46,19 @@ export function toErrorResponse(err: unknown): NextResponse {
   );
 }
 
+/**
+ * Browsers keep a response 15 s. Vercel's CDN keeps it 30 s and may serve it up
+ * to 5 min stale while it refetches, so most visitors never wait on the function.
+ */
+const CACHE_HEADERS = {
+  "Cache-Control": "public, max-age=15, stale-while-revalidate=45",
+  "CDN-Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+};
+
 /** Wrap a route body: JSON on success, structured error otherwise. */
 export async function respond<T>(fn: () => Promise<T>): Promise<NextResponse> {
   try {
-    return NextResponse.json(await fn(), { headers: { "Cache-Control": "public, max-age=15, stale-while-revalidate=45" } });
+    return NextResponse.json(await fn(), { headers: CACHE_HEADERS });
   } catch (err) {
     return toErrorResponse(err);
   }

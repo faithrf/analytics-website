@@ -15,6 +15,7 @@ import {
   Panel,
   QuoteTime,
   Skeleton,
+  StoryTime,
   Tabs,
 } from "@/components/ui";
 
@@ -26,6 +27,7 @@ interface GlobalTile {
 }
 interface NewsData {
   news: (MarketNewsItem & { regions: RegionId[] })[];
+  sources?: string[];
   mentions: { symbol: string; count: number }[];
   quotes: QuoteDTO[];
 }
@@ -51,14 +53,6 @@ function tickerLabel(symbol: string): string {
   if (known) return known;
   const id = fromYahoo(symbol);
   return isValidId(id) ? displayCode(id) : symbol;
-}
-
-function ago(t: number | null): string {
-  if (!t) return "";
-  const m = Math.max(0, Math.round((Date.now() - t) / 60_000));
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
 }
 
 function TickerChip({ symbol, quote }: { symbol: string; quote?: QuoteDTO }) {
@@ -108,6 +102,7 @@ export function NewsView() {
     `/api/market-news?region=${feed}`,
     refresh ? 300_000 : 0,
   );
+  const sourceList = news.data?.sources?.length ? news.data.sources : ["Yahoo Finance"];
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -127,7 +122,17 @@ export function NewsView() {
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-12">
         <Panel
           className="min-h-[320px] lg:col-span-8"
-          title="Market headlines"
+          title={
+            <span className="flex items-baseline gap-2">
+              Market headlines
+              <span
+                className="max-w-[28ch] truncate text-xs font-normal text-muted sm:max-w-[48ch]"
+                title={`Sources: ${sourceList.join(", ")}`}
+              >
+                Sources: {sourceList.join(", ")}
+              </span>
+            </span>
+          }
           right={
             <>
               <Freshness
@@ -277,10 +282,17 @@ function Headlines({ data, error, loading, reload }: NewsState) {
               {n.title}
             </a>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-              <span>
-                {n.publisher}
-                {n.time ? `, ${ago(n.time)}` : ""}
+              <span className="font-medium text-ink/80">
+                {n.publisher || "Unknown source"}
               </span>
+              {n.time ? (
+                <>
+                  <span aria-hidden>·</span>
+                  <StoryTime t={n.time} />
+                </>
+              ) : (
+                <span>· time not given</span>
+              )}
               {n.regions.map((r) => (
                 <span key={r} className="rounded bg-panel2 px-1.5 py-0.5">
                   {region(r).label}
