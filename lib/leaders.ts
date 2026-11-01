@@ -23,7 +23,8 @@ const STAKES_TTL = 10 * 60_000;
 const HOUSE_TTL = 15 * 60_000;
 
 /** Surface a failed source as a clear 502 instead of the Yahoo-worded default. */
-const upstream = (what: string) => (): never => {
+const upstream = (what: string) => (e?: unknown): never => {
+  if (e instanceof ApiError) throw e;
   throw new ApiError(502, "upstream", `Could not load ${what}. Data will retry shortly.`);
 };
 
@@ -90,6 +91,9 @@ function secFetch(url: string): Promise<string> {
       cache: "no-store",
     });
     await new Promise((r) => setTimeout(r, SEC_GAP_MS));
+    // SEC answers 403 to any User-Agent without a contact email
+    if (res.status === 403)
+      throw new ApiError(502, "upstream", "SEC refused the request. Set SEC_USER_AGENT to an app name and contact email, e.g. \"Meridian/1.0 you@example.com\".");
     if (!res.ok) throw new Error(`SEC ${res.status}`);
     return res.text();
   });

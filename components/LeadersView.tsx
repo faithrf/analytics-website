@@ -67,9 +67,12 @@ function Banner({
   range,
   count,
   since,
+  failed,
 }: {
   rule: ReactNode;
   fetchedAt?: number;
+  /** The feed errored with nothing to show, so don't claim it is still loading. */
+  failed?: boolean;
   extra?: ReactNode;
   range: Range;
   count: number;
@@ -88,7 +91,7 @@ function Banner({
           ? `Collecting since ${new Date(since).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}; the full week fills in as the server runs. `
           : ""}
         {extra}
-        {fetchedAt && now ? `Data refreshed ${agoShort(fetchedAt, now)}` : "Loading…"}
+        {fetchedAt && now ? `Data refreshed ${agoShort(fetchedAt, now)}` : failed ? "Feed unavailable" : "Loading…"}
       </span>
     </div>
   );
@@ -249,6 +252,7 @@ function Insiders({ range, fl }: { range: Range; fl: Fl }) {
         range={range}
         count={rows.length}
         since={api.data?.since}
+        failed={!!api.error && !api.data}
         extra={api.data ? `Read ${api.data.listed} Form 4 filings · ` : undefined}
       />
       <div className="flex flex-wrap items-center gap-3">
@@ -321,6 +325,7 @@ function Congress({ range, fl }: { range: Range; fl: Fl }) {
         range={range}
         count={rows.length}
         since={api.data?.since}
+        failed={!!api.error && !api.data}
         extra={api.data ? `Trades refresh every ${api.data.refreshMin >= 60 ? `${api.data.refreshMin / 60} h` : `${api.data.refreshMin} min`}${api.data.keyed ? "" : " (keyless daily limit)"} · ` : undefined}
       />
       {house.length > 0 && (
@@ -403,6 +408,7 @@ function Stakes({ range, fl }: { range: Range; fl: Fl }) {
         range={range}
         count={rows.length}
         since={api.data?.since}
+        failed={!!api.error && !api.data}
       />
       {api.error && !api.data ? (
         <ErrorBox error={api.error} onRetry={api.reload} compact />
