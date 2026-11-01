@@ -8,6 +8,7 @@ export function PinMenu({ id }: { id: string }) {
   const { boards, pin, unpin, create } = useBoards();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [alignLeft, setAlignLeft] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const count = boards.filter((b) => b.ids.includes(id)).length;
@@ -39,7 +40,12 @@ export function PinMenu({ id }: { id: string }) {
   return (
     <div ref={box} className="relative">
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          // a right-aligned menu overflows the left edge when the button wraps to the start of a narrow row
+          const r = box.current?.getBoundingClientRect();
+          setAlignLeft(!!r && r.right < 272);
+          setOpen((o) => !o);
+        }}
         aria-expanded={open}
         aria-controls={menuId}
         className={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -51,7 +57,7 @@ export function PinMenu({ id }: { id: string }) {
       {open && (
         <div
           id={menuId}
-          className="absolute top-full right-0 z-50 mt-1 w-64 rounded-md border border-line bg-panel p-2 text-sm shadow-lg"
+          className={`absolute top-full ${alignLeft ? "left-0" : "right-0"} z-50 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-md border border-line bg-panel p-2 text-sm shadow-lg`}
         >
           <p className="px-1 pb-1 text-xs text-muted">Pin to dashboards</p>
           <ul className="max-h-56 overflow-auto">
