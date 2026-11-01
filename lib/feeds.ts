@@ -24,7 +24,19 @@ export interface MarketFeed {
   url: string;
   /** markets the feed speaks to; empty = relevant to every market */
   regions: RegionId[];
+  /** fetch tuning for flaky feeds */
+  fetch?: FeedFetch;
 }
+
+interface FeedFetch {
+  /** how long a good copy is fresh (default FEED_TTL) */
+  ttlMs?: number;
+  /** extra attempts after a failed or empty fetch (default 0) */
+  retries?: number;
+}
+
+/** Nasdaq often times out or answers empty: retry, and keep good copies longer. */
+const NASDAQ_FETCH: FeedFetch = { ttlMs: 30 * 60_000, retries: 1 };
 
 export const MARKET_FEEDS: MarketFeed[] = [
   { id: "abc", name: "ABC", url: "https://www.abc.net.au/news/feed/104217374/rss.xml", regions: ["au"] },
@@ -35,7 +47,13 @@ export const MARKET_FEEDS: MarketFeed[] = [
     url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147",
     regions: ["us"],
   },
-  { id: "nasdaq", name: "Nasdaq", url: "https://www.nasdaq.com/feed/rssoutbound?category=Markets", regions: ["us"] },
+  {
+    id: "nasdaq",
+    name: "Nasdaq",
+    url: "https://www.nasdaq.com/feed/rssoutbound?category=Markets",
+    regions: ["us"],
+    fetch: NASDAQ_FETCH,
+  },
   { id: "scmp", name: "SCMP", url: "https://www.scmp.com/rss/92/feed", regions: ["hk"] },
   { id: "nikkei", name: "Nikkei Asia", url: "https://asia.nikkei.com/rss/feed/nar", regions: ["jp", "hk"] },
 ];
@@ -46,6 +64,7 @@ const PER_FEED = 30;
 const FEED_TTL = 12 * 60_000;
 const FEED_SWR = 60 * 60_000;
 const FAIL_TTL = 60_000;
+const RETRY_DELAY_MS = 700;
 const USER_AGENT = "Mozilla/5.0 (compatible; MeridianDashboard/1.0; headline reader, links only)";
 
 /* ---------- parsing ---------- */
@@ -194,14 +213,34 @@ interface FeedShared {
 const g = globalThis as unknown as { __feeds1?: FeedShared };
 const shared: FeedShared = (g.__feeds1 ??= { cache: new TtlCache<FeedItem[]>(400) });
 
+/** Fetch and parse, trying again `retries` times when the fetch fails or (if retrying) comes back empty. */
+async function loadFeed(url: string, publisher: string, retries: number): Promise<FeedItem[]> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const items = parseFeed(await fetchText(url), publisher);
+      if (items.length || !retries) return items;
+      if (attempt >= retries) throw new Error("feed empty");
+    } catch (err) {
+      if (attempt >= retries) throw err;
+    }
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * (attempt + 1)));
+  }
+}
+
 /** Cached fetch: stale copies are served on error / while refreshing; a dead feed is retried after a minute. */
-async function cachedFeed(key: string, url: string, publisher: string, source: string): Promise<FeedItem[]> {
+async function cachedFeed(
+  key: string,
+  url: string,
+  publisher: string,
+  source: string,
+  opts: FeedFetch = {},
+): Promise<FeedItem[]> {
   try {
     return await shared.cache.getOrLoad(
       key,
-      FEED_TTL,
+      opts.ttlMs ?? FEED_TTL,
       async () => {
-        const items = parseFeed(await fetchText(url), publisher);
+        const items = await loadFeed(url, publisher, opts.retries ?? 0);
         return items.slice(0, PER_FEED).map((i) => ({ ...i, source }));
       },
       { staleOnError: true, swrMs: FEED_SWR },
@@ -219,7 +258,7 @@ export async function getMarketFeedItems(
   const feeds = MARKET_FEEDS.filter(
     (f) => !regions || f.regions.length === 0 || f.regions.some((r) => regions.includes(r)),
   );
-  const lists = await Promise.all(feeds.map((f) => cachedFeed(`m:${f.id}`, f.url, f.name, f.name)));
+  const lists = await Promise.all(feeds.map((f) => cachedFeed(`m:${f.id}`, f.url, f.name, f.name, f.fetch)));
   return lists.flatMap((items, i) => {
     const tagged = regions ? feeds[i].regions.filter((r) => regions.includes(r)) : feeds[i].regions;
     return items.map((it) => ({ ...it, regions: tagged }));
@@ -244,7 +283,7 @@ export async function getStockFeedItems(name: string, usTicker: string | null): 
   }
   if (usTicker && US_ID.test(usTicker)) {
     const url = `https://www.nasdaq.com/feed/rssoutbound?symbol=${encodeURIComponent(usTicker)}`;
-    jobs.push(cachedFeed(`n:${usTicker}`, url, "Nasdaq", "Nasdaq"));
+    jobs.push(cachedFeed(`n:${usTicker}`, url, "Nasdaq", "Nasdaq", NASDAQ_FETCH));
   }
   return (await Promise.all(jobs)).flat();
 }

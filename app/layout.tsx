@@ -3,6 +3,7 @@ import { Instrument_Sans } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 
 const body = Instrument_Sans({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
+        <ImpersonationBanner />
         <Header />
         <main className="min-h-0 flex-1 p-3 lg:overflow-hidden">{children}</main>
         <Footer />

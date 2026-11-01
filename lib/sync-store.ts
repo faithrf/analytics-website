@@ -19,7 +19,7 @@ interface Store {
 
 const recKey = (code: string) => `sync:${code}`;
 
-function redisConfig(): { url: string; token: string } | null {
+export function redisConfig(): { url: string; token: string } | null {
   const e = process.env;
   const url = e.UPSTASH_REDIS_REST_URL || e.KV_REST_API_URL;
   const token = e.UPSTASH_REDIS_REST_TOKEN || e.KV_REST_API_TOKEN;

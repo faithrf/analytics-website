@@ -13,6 +13,7 @@
   --accent-ink: #06122a;
   --gain: #26c6a0;
   --loss: #ff6b6b;
+  --warn: #f0b429;
   --focus: #7aa7ff;
   color-scheme: dark;
 }
@@ -28,6 +29,7 @@ html[data-theme="light"] {
   --accent-ink: #ffffff;
   --gain: #067a5b;
   --loss: #d12f3c;
+  --warn: #9a6100;
   --focus: #2962ff;
   color-scheme: light;
 }
@@ -43,6 +45,7 @@ html[data-theme="light"] {
   --color-accentink: var(--accent-ink);
   --color-gain: var(--gain);
   --color-loss: var(--loss);
+  --color-warn: var(--warn);
   --font-sans: var(--font-body), "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 }
 

@@ -3,6 +3,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import * as ops from "@/lib/boards";
 import { BOARDS_KEY, defaultState, LEGACY_WATCHLIST_KEY, mergeLegacy, parseBoards, type BoardsState } from "@/lib/boards";
 import { formatCode, normaliseCode } from "@/lib/sync-code";
+import { whenAccountLoaded } from "@/lib/use-account";
 
 const SERVER = defaultState();
 const listeners = new Set<() => void>();
@@ -59,16 +60,59 @@ function subscribe(cb: () => void) {
 
 function commit(next: BoardsState, fromRemote = false) {
   const json = JSON.stringify(next);
-  try {
-    window.localStorage.setItem(BOARDS_KEY, json);
-  } catch {
-    /* storage unavailable (private mode, quota): boards just will not persist */
+  if (!userMode) {
+    try {
+      window.localStorage.setItem(BOARDS_KEY, json);
+    } catch {
+      /* storage unavailable (private mode, quota): boards just will not persist */
+    }
+    if (read(BOARDS_KEY) !== json) memoryOnly = true;
   }
-  if (read(BOARDS_KEY) !== json) memoryOnly = true;
   cachedRaw = json;
   cached = next;
   listeners.forEach((l) => l());
-  if (!fromRemote && syncState.code) schedulePush();
+  if (fromRemote) return;
+  if (userMode) scheduleUserPush();
+  else if (syncState.code) schedulePush();
+}
+
+/* ---- Logged in: boards live on the server under the user, never in localStorage ---- */
+
+let userMode = false;
+let userPushTimer: ReturnType<typeof setTimeout> | undefined;
+
+function scheduleUserPush() {
+  clearTimeout(userPushTimer);
+  userPushTimer = setTimeout(async () => {
+    try {
+      const s = getSnapshot();
+      await fetch("/api/me/data", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ boards: s.boards, active: s.active }),
+        cache: "no-store",
+      });
+    } catch {
+      /* offline: the next change tries again */
+    }
+  }, PUSH_DELAY_MS);
+}
+
+async function enterUserModeIfLoggedIn() {
+  try {
+    const acct = await whenAccountLoaded();
+    if (!acct.user) return;
+    const res = await fetch("/api/me/data", { cache: "no-store" });
+    if (!res.ok) return;
+    const d = (await res.json()) as { boards?: unknown; active?: unknown };
+    userMode = true;
+    memoryOnly = true;
+    clearTimeout(pushTimer);
+    pushTimer = undefined;
+    commit(parseBoards(JSON.stringify({ boards: d.boards, active: d.active })), true);
+  } catch {
+    /* server unreachable: stay on local boards */
+  }
 }
 
 const newId = () => `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -180,7 +224,7 @@ function adoptRemote(data: Record<string, unknown>) {
 
 async function pull() {
   const code = syncState.code;
-  if (!code || halted || pushing || pushTimer) return;
+  if (!code || halted || pushing || pushTimer || userMode) return;
   try {
     const r = await call("GET", code);
     if (code !== syncState.code) return;
@@ -246,6 +290,7 @@ function startSyncEngine() {
   window.addEventListener("focus", pull);
   setInterval(pull, PULL_EVERY_MS);
   void pull();
+  void enterUserModeIfLoggedIn();
 }
 
 function stopSync() {

@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
+import { logout, trackClient, useAccount, whenAccountLoaded } from "@/lib/use-account";
 import { isRegion, region, type RegionId } from "@/lib/markets";
 import { regionOf } from "@/lib/symbols";
 import { useMarketStatus } from "@/lib/use-market-status";
@@ -104,6 +105,64 @@ function NavLink({ href, children }: { href: string; children: string }) {
   );
 }
 
+function UserMenu() {
+  const acct = useAccount();
+  const [open, setOpen] = useState(false);
+  const path = usePathname();
+  useEffect(() => {
+    let live = true;
+    void whenAccountLoaded().then(() => live && trackClient("tab_viewed", { tab: path.startsWith("/stock/") ? "/stock" : path }));
+    return () => {
+      live = false;
+    };
+  }, [path]);
+  if (!acct.loaded) return <div className="h-8 w-16" aria-hidden />;
+  if (!acct.user) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Link
+          href="/login"
+          className="rounded-md border border-line bg-panel px-2.5 py-1 text-sm font-medium text-muted hover:border-accent hover:text-accent"
+        >
+          Log in
+        </Link>
+        {acct.signupEnabled && (
+          <Link href="/signup" className="rounded-md bg-accent px-2.5 py-1 text-sm font-semibold text-accentink">
+            Sign up
+          </Link>
+        )}
+      </div>
+    );
+  }
+  const item = "block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-panel2";
+  return (
+    <div className="relative" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex h-8 max-w-52 items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 text-sm font-medium hover:border-accent"
+      >
+        <span className="truncate">{acct.user.name.replace(/^Test Persona - /, "")}</span>
+        <span aria-hidden className="text-[10px] text-muted">▾</span>
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 z-30 mt-1 w-52 rounded-md border border-line bg-panel p-1 shadow-lg">
+          <div className="truncate px-2 py-1 text-xs text-muted">{acct.user.email || acct.user.id}</div>
+          {acct.isAdmin && (
+            <Link href="/admin" role="menuitem" className={item} onClick={() => setOpen(false)}>
+              Admin
+            </Link>
+          )}
+          <button role="menuitem" className={item} onClick={() => void logout()}>
+            Log out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Header() {
   return (
     <header className="flex h-12 shrink-0 items-center gap-4 border-b border-line bg-panel px-3">
@@ -114,6 +173,7 @@ export function Header() {
         <NavLink href="/">Markets</NavLink>
         <NavLink href="/dashboard">Dashboard</NavLink>
         <NavLink href="/news">News</NavLink>
+        <NavLink href="/leaders">Leaders</NavLink>
       </nav>
       <div className="flex min-w-0 flex-1 justify-center">
         <SearchBox />
@@ -122,6 +182,7 @@ export function Header() {
         <MarketBadge />
       </Suspense>
       <ThemeToggle />
+      <UserMenu />
     </header>
   );
 }
