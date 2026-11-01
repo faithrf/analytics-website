@@ -29,7 +29,7 @@ export interface Who {
 }
 
 export function userFor(id: string): CurrentUser | null {
-  if (id === ADMIN_ID) return { id, name: "Admin", email: process.env.ADMIN_EMAIL ?? "", isPersona: false };
+  if (id === ADMIN_ID) return { id, name: process.env.ADMIN_NAME?.trim() || "Admin", email: process.env.ADMIN_EMAIL ?? "", isPersona: false };
   const p = personaById(id);
   return p ? { id: p.id, name: p.name, email: p.email, isPersona: true } : null;
 }

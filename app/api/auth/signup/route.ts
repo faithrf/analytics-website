@@ -27,6 +27,10 @@ export async function POST(req: NextRequest) {
   if (password.length < MIN_PASSWORD || password.length > MAX_PASSWORD) {
     return json({ error: "invalid", message: `Password must be ${MIN_PASSWORD}-${MAX_PASSWORD} characters.` }, 400);
   }
+  // the admin email logs in through ADMIN_PASSWORD_HASH; a regular account under it would be unreachable
+  if (email === process.env.ADMIN_EMAIL?.trim().toLowerCase()) {
+    return json({ error: "conflict", message: "Couldn't create that account. Try logging in instead." }, 409);
+  }
   const r = await createAccount({ email, name, password }).catch(() => ({ ok: false as const, reason: "unavailable" as const }));
   if (!r.ok) {
     if (r.reason === "duplicate") return json({ error: "conflict", message: "Couldn't create that account. Try logging in instead." }, 409);
