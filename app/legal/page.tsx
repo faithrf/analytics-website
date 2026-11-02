@@ -24,6 +24,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
     body: [
       "Prices, charts, fundamentals, news and filings come from third-party sources, including unofficial Yahoo Finance data, SEC EDGAR and public STOCK Act disclosures. Quotes are delayed (typically ~20 minutes) and may be incomplete, out of date or wrong.",
       "Always check figures against an official source, such as your broker or the exchange, before relying on them. Past performance is not a reliable indicator of future performance.",
+      "The trading simulator is for learning only. Option prices come from Yahoo Finance (delayed) when available and are otherwise estimated with a model, and results do not reflect real trading outcomes. Selling options can lose more than the premium collected, and sold calls have unlimited risk.",
       "Meridian is not affiliated with or endorsed by Yahoo, any exchange, any news publisher or any person named on the Leaders tab. Trademarks and headlines belong to their owners.",
     ],
   },
@@ -37,7 +38,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
   {
     title: "Accounts and privacy",
     body: [
-      "You can use Meridian without an account. If you sign up, Meridian stores your email address, optional display name, a salted hash of your password (never the password itself), your dashboards and the leaders you follow.",
+      "You can use Meridian without an account. If you sign up, Meridian stores your email address, optional display name, a salted hash of your password (never the password itself), your dashboards, the leaders you follow and your trading simulator (paper) trades.",
       "When you are logged in, Meridian records simple usage events such as logins, tabs viewed and stocks pinned. These may be sent to an analytics tool run by the author to test and improve the site. Your data is not sold or shared for advertising.",
       "The author can view and access accounts for testing and support. Don't use a password you use anywhere else, and don't store anything sensitive here.",
       "Data is held with the hosting providers (Vercel and Upstash). You can delete your account at any time from the account menu; this removes your account and saved data immediately.",
@@ -46,7 +47,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
   {
     title: "Cookies and local storage",
     body: [
-      "Meridian sets one essential cookie to keep you logged in. Your browser's local storage keeps your theme and, when logged out, your dashboards. There are no advertising or third-party tracking cookies.",
+      "Meridian sets one essential cookie to keep you logged in. Your browser's local storage keeps your theme and, when logged out, your dashboards and simulator trades. There are no advertising or third-party tracking cookies.",
     ],
   },
 ];

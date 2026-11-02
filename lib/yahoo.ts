@@ -5,6 +5,7 @@ import { keepLastSessions, rangeParams, rangeTtlMs, type Range } from "@/lib/ran
 import { calcChange } from "@/lib/aggregate";
 import { getStockFeedItems, mergeNews } from "@/lib/feeds";
 import { displayCode, fromYahoo, isValidId, marketOf } from "@/lib/symbols";
+import { mapChain, midPrice, type ContractQuote, type OptionChain } from "@/lib/options";
 
 /* ---------- config ---------- */
 
@@ -28,21 +29,27 @@ interface Shared {
   yf: InstanceType<typeof YahooFinance>;
   quotes: TtlCache<QuoteDTO>;
   charts: TtlCache<ChartDTO>;
+  daily: TtlCache<DailyBar[]>;
   news: TtlCache<NewsItem[]>;
   marketNews: TtlCache<MarketNewsItem[]>;
   search: TtlCache<SearchHit[]>;
   details: TtlCache<StockDetails>;
+  chains: TtlCache<OptionChain>;
+  contracts: TtlCache<ContractQuote>;
 }
-const g = globalThis as unknown as { __asx4?: Shared };
+const g = globalThis as unknown as { __asx6?: Shared };
 // Bump the key when Shared gains a field, so a dev server keeps no stale shape across HMR.
-const shared: Shared = (g.__asx4 ??= {
+const shared: Shared = (g.__asx6 ??= {
   yf: new YahooFinance({ suppressNotices: ["yahooSurvey"] }),
   quotes: new TtlCache<QuoteDTO>(1000),
   charts: new TtlCache<ChartDTO>(300),
+  daily: new TtlCache<DailyBar[]>(300),
   news: new TtlCache<NewsItem[]>(300),
   marketNews: new TtlCache<MarketNewsItem[]>(50),
   search: new TtlCache<SearchHit[]>(300),
   details: new TtlCache<StockDetails>(500),
+  chains: new TtlCache<OptionChain>(200),
+  contracts: new TtlCache<ContractQuote>(500),
 });
 const { yf } = shared;
 const OPTS = { validateResult: false } as const;
@@ -83,6 +90,13 @@ export interface ChartDTO {
   range: Range;
   points: ChartPoint[];
   prevClose: number | null;
+}
+/** One trading day. t is UTC midnight of the exchange's local date, so dates compare directly. */
+export interface DailyBar {
+  t: number;
+  high: number;
+  low: number;
+  close: number;
 }
 export interface NewsItem {
   title: string;
@@ -345,6 +359,90 @@ export async function getChart(symbol: string, range: Range): Promise<ChartDTO> 
     },
     { staleOnError: true, swrMs: HISTORY_SWR },
   );
+}
+
+/** Daily bars from `from` (ms) to now, for the test-trades page. */
+export async function getDaily(symbol: string, from: number): Promise<DailyBar[]> {
+  const day = 86_400_000;
+  const start = Math.floor(from / day) * day - 2 * day;
+  return shared.daily.getOrLoad(
+    `${symbol}|${start}`,
+    HISTORY_TTL_S * 1000,
+    async () => {
+      const res = (await yf.chart(symbol, { period1: new Date(start), interval: "1d" }, OPTS)) as unknown as {
+        meta?: Raw;
+        quotes?: Raw[];
+      };
+      const offset = num(res.meta?.gmtoffset) ?? 0;
+      const bars: DailyBar[] = [];
+      for (const q of res.quotes ?? []) {
+        const t = toMs(q.date);
+        const high = num(q.high);
+        const low = num(q.low);
+        const close = num(q.close);
+        if (t === null || high === null || low === null || close === null) continue;
+        bars.push({ t: Math.floor((t + offset * 1000) / day) * day, high, low, close });
+      }
+      return bars;
+    },
+    { staleOnError: true, swrMs: HISTORY_SWR },
+  );
+}
+
+/* ---------- options (test trades) ---------- */
+
+const OPTIONS_TTL = 120_000;
+
+/** Option chain for one expiry (the nearest when `date` is omitted). Stocks without options give empty expiries. */
+export async function getOptionChain(symbol: string, date?: number): Promise<OptionChain> {
+  return shared.chains.getOrLoad(
+    `${symbol}|${date ?? ""}`,
+    OPTIONS_TTL,
+    async () => {
+      const res = (await yf.options(symbol, date !== undefined ? { date: new Date(date) } : {}, OPTS)) as unknown as Raw;
+      return mapChain(symbol, res);
+    },
+    { staleOnError: true, swrMs: OPTIONS_TTL },
+  );
+}
+
+/** Current quote and daily closes for one option contract; closes are best effort (empty on failure). */
+async function loadContract(contractSymbol: string, from: number): Promise<ContractQuote> {
+  const day = 86_400_000;
+  const start = Math.floor(from / day) * day - 2 * day;
+  const [quote, chart] = await Promise.allSettled([
+    yf.quote(contractSymbol, {}, OPTS) as Promise<Raw>,
+    yf.chart(contractSymbol, { period1: new Date(start), interval: "1d" }, OPTS) as unknown as Promise<{ meta?: Raw; quotes?: Raw[] }>,
+  ]);
+  if (quote.status === "rejected" && chart.status === "rejected") throw quote.reason;
+  const q = quote.status === "fulfilled" ? quote.value : {};
+  const bid = num(q.bid);
+  const ask = num(q.ask);
+  const last = num(q.regularMarketPrice);
+  const bars: ContractQuote["bars"] = [];
+  if (chart.status === "fulfilled") {
+    const offset = num(chart.value.meta?.gmtoffset) ?? 0;
+    for (const c of chart.value.quotes ?? []) {
+      const t = toMs(c.date);
+      const close = num(c.close);
+      if (t !== null && close !== null && close > 0) bars.push({ t: Math.floor((t + offset * 1000) / day) * day, close });
+    }
+  }
+  return { contractSymbol, bid, ask, last, mark: midPrice(bid, ask, last), bars };
+}
+
+/** Quotes for up to 50 contracts (callers validate the symbols). Contracts Yahoo cannot serve are left out. */
+export async function getContractQuotes(contracts: string[], from: number): Promise<ContractQuote[]> {
+  const day = 86_400_000;
+  const results = await Promise.allSettled(
+    contracts.map((c) => shared.contracts.getOrLoad(`${c}|${Math.floor(from / day)}`, OPTIONS_TTL, () => loadContract(c, from), { staleOnError: true, swrMs: OPTIONS_TTL })),
+  );
+  const out = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  if (out.length === 0 && results.length > 0) {
+    const failed = results.find((r) => r.status === "rejected");
+    if (failed && failed.status === "rejected") throw failed.reason;
+  }
+  return out;
 }
 
 /* ---------- news, search, profile ---------- */

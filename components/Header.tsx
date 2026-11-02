@@ -221,6 +221,7 @@ export function Header() {
       <nav aria-label="Main" className="flex items-center gap-1">
         <NavLink href="/">Markets</NavLink>
         <NavLink href="/dashboard">Dashboard</NavLink>
+        <NavLink href="/trades">Trading simulator</NavLink>
         <NavLink href="/news">News</NavLink>
         <NavLink href="/leaders">Leaders</NavLink>
       </nav>

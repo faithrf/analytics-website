@@ -4,10 +4,12 @@ import { defaultState, parseBoards, type BoardsState } from "@/lib/boards";
 import { ADMIN_ID } from "@/lib/session";
 import { personaById } from "@/lib/personas";
 import { redisConfig } from "@/lib/sync-store";
+import { parseTrades, type Trade } from "@/lib/trades";
 
-/** Per-user saved data: boards plus the Leaders names/tickers they follow. */
+/** Per-user saved data: boards, the Leaders names/tickers they follow, and test trades. */
 export interface UserData extends BoardsState {
   follows: string[];
+  trades: Trade[];
 }
 
 export const MAX_FOLLOWS = 40;
@@ -26,13 +28,26 @@ export function cleanFollows(v: unknown): string[] {
 
 export function parseUserData(raw: unknown): UserData {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  return { ...parseBoards(JSON.stringify(obj)), follows: cleanFollows(obj.follows) };
+  return { ...parseBoards(JSON.stringify(obj)), follows: cleanFollows(obj.follows), trades: parseTrades(obj.trades) };
+}
+
+/** Merges a PUT body into saved data. Only the fields present change; the rest are kept. */
+export function applyPatch(prev: UserData, body: Record<string, unknown>): UserData {
+  const next: UserData = { ...prev };
+  if (Array.isArray(body.boards)) {
+    const b = parseBoards(JSON.stringify({ boards: body.boards, active: body.active }));
+    next.boards = b.boards;
+    next.active = b.active;
+  }
+  if (Array.isArray(body.follows)) next.follows = cleanFollows(body.follows);
+  if (Array.isArray(body.trades)) next.trades = parseTrades(body.trades);
+  return next;
 }
 
 /** What a user starts with: a persona's seeded data, or an empty watchlist. */
 export function seedFor(userId: string): UserData {
   const p = personaById(userId);
-  return p ? parseUserData({ boards: p.boards.boards, active: p.boards.active, follows: p.follows }) : { ...defaultState(), follows: [] };
+  return p ? parseUserData({ boards: p.boards.boards, active: p.boards.active, follows: p.follows }) : { ...defaultState(), follows: [], trades: [] };
 }
 
 interface Store {

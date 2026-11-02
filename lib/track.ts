@@ -13,10 +13,12 @@ export type TrackEvent =
   | "watchlist_remove"
   | "leader_follow"
   | "leader_unfollow"
+  | "trade_opened"
+  | "trade_closed"
   | "tab_viewed";
 
 export const TRACK_EVENTS: readonly TrackEvent[] = [
-  "login", "signed_up", "logout", "account_deleted", "board_saved", "watchlist_add", "watchlist_remove", "leader_follow", "leader_unfollow", "tab_viewed",
+  "login", "signed_up", "logout", "account_deleted", "board_saved", "watchlist_add", "watchlist_remove", "leader_follow", "leader_unfollow", "trade_opened", "trade_closed", "tab_viewed",
 ];
 /** Events the browser may report itself; the rest are only fired server-side. */
 export const CLIENT_EVENTS: readonly TrackEvent[] = ["tab_viewed"];
