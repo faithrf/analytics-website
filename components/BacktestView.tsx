@@ -20,10 +20,10 @@ type Period = "range" | "single";
 type Step = "week" | "month";
 
 const RANGES: { v: number; l: string }[] = [
+  { v: 1 / 12, l: "1M" },
+  { v: 0.5, l: "6M" },
   { v: 1, l: "1Y" },
-  { v: 3, l: "3Y" },
   { v: 5, l: "5Y" },
-  { v: 10, l: "10Y" },
 ];
 
 /** Well-known market moments to replay a single trade from. */
@@ -271,7 +271,7 @@ export function BacktestView() {
   const [target, setTarget] = useState("");
   const [stop, setStop] = useState("");
   const [period, setPeriod] = useState<Period>("range");
-  const [years, setYears] = useState<number | null>(3);
+  const [years, setYears] = useState<number | null>(1);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [step, setStep] = useState<Step>("week");
