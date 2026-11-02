@@ -124,9 +124,9 @@ export function useBoards() {
     ...state,
     activeBoard: state.boards.find((b) => b.id === state.active) ?? state.boards[0],
     /** Creates a board, makes it active and returns its id (null when the name is empty or the limit is hit). */
-    create: (name: string) => {
+    create: (name: string, ids?: string[]) => {
       const id = newId();
-      apply((s) => ops.createBoard(s, name, id));
+      apply((s) => ops.createBoard(s, name, id, ids));
       return getSnapshot().boards.some((b) => b.id === id) ? id : null;
     },
     rename: (id: string, name: string) => apply((s) => ops.renameBoard(s, id, name)),

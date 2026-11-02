@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { QuoteDTO } from "@/lib/yahoo";
 import { MAX_BOARDS, MAX_NAME, type Board } from "@/lib/boards";
+import { BOARD_PRESETS, PRESET_GROUPS } from "@/lib/board-presets";
 import { direction, fmtNum, priceDigits } from "@/lib/format";
 import { displayCode, marketOf, regionOf, toYahoo } from "@/lib/symbols";
 import { useApi } from "@/lib/use-api";
@@ -62,6 +63,7 @@ export function BoardsView() {
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
   const board = b.activeBoard;
 
   return (
@@ -88,15 +90,16 @@ export function BoardsView() {
               <button
                 key={x.id}
                 role="tab"
-                aria-selected={x.id === board.id}
+                aria-selected={!browsing && x.id === board.id}
                 onClick={() => {
                   b.setActive(x.id);
                   setConfirmDelete(false);
+                  setBrowsing(false);
                 }}
                 onDoubleClick={() => setRenaming(x.id)}
                 title="Double-click to rename"
                 className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-                  x.id === board.id
+                  !browsing && x.id === board.id
                     ? "bg-accent text-accentink"
                     : "text-muted hover:text-ink"
                 }`}
@@ -123,6 +126,13 @@ export function BoardsView() {
             </button>
           )
         )}
+        <button
+          onClick={() => setBrowsing((v) => !v)}
+          aria-pressed={browsing}
+          className={`${smallButton} ${browsing ? "border-accent text-accent" : ""}`}
+        >
+          Browse ready-made
+        </button>
         <div className="ml-auto flex items-center gap-2">
           <SyncMenu />
           {confirmDelete ? (
@@ -166,11 +176,97 @@ export function BoardsView() {
           )}
         </div>
       </div>
-      <BoardGrid
-        board={board}
-        onUnpin={(id) => b.unpin(board.id, id)}
-        onMove={(id, d) => b.move(board.id, id, d)}
-      />
+      {browsing ? (
+        <PresetBrowser
+          added={new Set(b.boards.map((x) => x.name))}
+          canAdd={b.boards.length < MAX_BOARDS}
+          onAdd={(name, ids) => {
+            if (b.create(name, ids)) setBrowsing(false);
+          }}
+        />
+      ) : (
+        <BoardGrid
+          board={board}
+          onUnpin={(id) => b.unpin(board.id, id)}
+          onMove={(id, d) => b.move(board.id, id, d)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Scrollable list of ready-made dashboards with a live preview of the one picked. */
+function PresetBrowser({
+  added,
+  canAdd,
+  onAdd,
+}: {
+  added: Set<string>;
+  canAdd: boolean;
+  onAdd: (name: string, ids: string[]) => void;
+}) {
+  const [i, setI] = useState(0);
+  const p = BOARD_PRESETS[i];
+  const go = (d: number) => setI((x) => (x + d + BOARD_PRESETS.length) % BOARD_PRESETS.length);
+  const have = added.has(p.name);
+  return (
+    <div className="flex min-h-0 flex-1 gap-3">
+      <nav
+        aria-label="Ready-made dashboards"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            go(e.key === "ArrowDown" ? 1 : -1);
+          }
+        }}
+        className="w-56 shrink-0 overflow-auto rounded-lg border border-line bg-panel p-1 outline-none focus-visible:border-accent"
+      >
+        {PRESET_GROUPS.map((g) => (
+          <div key={g}>
+            <div className="sticky top-0 bg-panel px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wide text-muted uppercase">{g}</div>
+            {BOARD_PRESETS.map((x, j) =>
+              x.group === g ? (
+                <button
+                  key={x.name}
+                  onClick={() => setI(j)}
+                  ref={j === i ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+                  aria-current={j === i}
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs ${
+                    j === i ? "bg-accent text-accentink" : "text-ink hover:bg-panel2"
+                  }`}
+                >
+                  <span className="min-w-0 flex-1 truncate">{x.name}</span>
+                  {added.has(x.name) && <span aria-label="added">✓</span>}
+                  <span className="opacity-60">{x.ids.length}</span>
+                </button>
+              ) : null,
+            )}
+          </div>
+        ))}
+      </nav>
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-lg border border-line bg-panel px-3 py-2">
+          <button onClick={() => go(-1)} aria-label="Previous dashboard" className={smallButton}>
+            {"‹"}
+          </button>
+          <button onClick={() => go(1)} aria-label="Next dashboard" className={smallButton}>
+            {"›"}
+          </button>
+          <span className="text-sm font-semibold">{p.name}</span>
+          <span className="text-xs text-muted">
+            {p.group} · {p.ids.length} stocks · {i + 1} of {BOARD_PRESETS.length}
+          </span>
+          <button
+            onClick={() => onAdd(p.name, p.ids)}
+            disabled={have || !canAdd}
+            className="ml-auto rounded bg-accent px-2.5 py-1 text-xs font-semibold text-accentink disabled:opacity-50"
+          >
+            {have ? "Added" : canAdd ? "+ Add to my dashboards" : `Limit of ${MAX_BOARDS} dashboards reached`}
+          </button>
+        </div>
+        <BoardGrid board={{ id: "preset", name: p.name, ids: p.ids }} />
+      </div>
     </div>
   );
 }
@@ -181,8 +277,9 @@ function BoardGrid({
   onMove,
 }: {
   board: Board;
-  onUnpin: (id: string) => void;
-  onMove: (id: string, delta: number) => void;
+  /** Left out for read-only previews. */
+  onUnpin?: (id: string) => void;
+  onMove?: (id: string, delta: number) => void;
 }) {
   const ids = board.ids;
   const refresh = useRefreshMsFor(ids.map(regionOf));
@@ -250,31 +347,33 @@ function BoardGrid({
                     {q?.name ?? " "}
                   </div>
                 </div>
-                <div className="flex shrink-0 gap-0.5 text-muted">
-                  <button
-                    onClick={() => onMove(id, -1)}
-                    disabled={i === 0}
-                    aria-label={`Move ${displayCode(id)} left`}
-                    className="rounded px-1 hover:text-accent disabled:opacity-30"
-                  >
-                    {"‹"}
-                  </button>
-                  <button
-                    onClick={() => onMove(id, 1)}
-                    disabled={i === ids.length - 1}
-                    aria-label={`Move ${displayCode(id)} right`}
-                    className="rounded px-1 hover:text-accent disabled:opacity-30"
-                  >
-                    {"›"}
-                  </button>
-                  <button
-                    onClick={() => onUnpin(id)}
-                    aria-label={`Unpin ${displayCode(id)} from ${board.name}`}
-                    className="rounded px-1 hover:text-loss"
-                  >
-                    {"×"}
-                  </button>
-                </div>
+                {onMove && onUnpin && (
+                  <div className="flex shrink-0 gap-0.5 text-muted">
+                    <button
+                      onClick={() => onMove(id, -1)}
+                      disabled={i === 0}
+                      aria-label={`Move ${displayCode(id)} left`}
+                      className="rounded px-1 hover:text-accent disabled:opacity-30"
+                    >
+                      {"‹"}
+                    </button>
+                    <button
+                      onClick={() => onMove(id, 1)}
+                      disabled={i === ids.length - 1}
+                      aria-label={`Move ${displayCode(id)} right`}
+                      className="rounded px-1 hover:text-accent disabled:opacity-30"
+                    >
+                      {"›"}
+                    </button>
+                    <button
+                      onClick={() => onUnpin(id)}
+                      aria-label={`Unpin ${displayCode(id)} from ${board.name}`}
+                      className="rounded px-1 hover:text-loss"
+                    >
+                      {"×"}
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="flex min-h-0 flex-1 items-end justify-between gap-2">
                 {q ? (

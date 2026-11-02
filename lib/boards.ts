@@ -98,11 +98,11 @@ const mapBoard = (s: BoardsState, id: string, fn: (b: Board) => Board): BoardsSt
   boards: s.boards.map((b) => (b.id === id ? fn(b) : b)),
 });
 
-/** Adds a board and makes it active. `newId` is passed in to keep this pure. */
-export function createBoard(s: BoardsState, name: string, newId: string): BoardsState {
+/** Adds a board (optionally pre-filled) and makes it active. `newId` is passed in to keep this pure. */
+export function createBoard(s: BoardsState, name: string, newId: string, ids: string[] = []): BoardsState {
   const clean = cleanName(name);
   if (!clean || s.boards.length >= MAX_BOARDS || !BOARD_ID_RE.test(newId) || s.boards.some((b) => b.id === newId)) return s;
-  return { boards: [...s.boards, { id: newId, name: clean, ids: [] }], active: newId };
+  return { boards: [...s.boards, { id: newId, name: clean, ids: cleanIds(ids) }], active: newId };
 }
 
 export function renameBoard(s: BoardsState, id: string, name: string): BoardsState {

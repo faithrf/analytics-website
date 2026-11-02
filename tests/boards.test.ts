@@ -105,3 +105,11 @@ describe("mergeLegacy", () => {
     expect(mergeLegacy(s, "{oops")).toBe(s);
   });
 });
+
+describe("createBoard with pins", () => {
+  it("pre-fills cleaned, de-duplicated pins", () => {
+    const s = createBoard(defaultState(), "Fintech", "fin", ["pypl.us", "PYPL.US", "ZIP", "bad id!"]);
+    expect(s.boards.find((b) => b.id === "fin")?.ids).toEqual(["PYPL.US", "ZIP"]);
+    expect(s.active).toBe("fin");
+  });
+});
