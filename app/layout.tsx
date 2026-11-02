@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="flex min-h-dvh flex-col lg:h-dvh lg:overflow-hidden">
         <ImpersonationBanner />
         <Header />
-        <main className="min-h-0 flex-1 p-3 lg:overflow-hidden">{children}</main>
+        <main className="min-h-0 min-w-0 flex-1 p-3 lg:overflow-hidden">{children}</main>
         <Footer />
       </body>
     </html>

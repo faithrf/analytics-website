@@ -31,11 +31,11 @@ function useViewedRegion(): RegionId {
 function MarketBadge() {
   const id = useViewedRegion();
   const s = useMarketStatus(id);
-  if (!s) return <div className="h-7 w-44 rounded-full border border-line" aria-hidden />;
+  if (!s) return <div className="hidden h-7 w-32 shrink-0 rounded-full border border-line sm:block" aria-hidden />;
   const name = region(id).exchange;
   return (
     <div
-      className="flex items-center gap-2 rounded-full border border-line bg-panel px-3 py-1 text-xs whitespace-nowrap"
+      className="hidden shrink-0 items-center gap-2 rounded-full border border-line bg-panel px-3 py-1 text-xs whitespace-nowrap sm:flex"
       role="status"
       title={hoursNote(id)}
     >
@@ -43,8 +43,9 @@ function MarketBadge() {
         aria-hidden
         className={`inline-block size-2 ${s.open ? "rounded-full bg-gain" : "rounded-[2px] border border-muted"}`}
       />
-      <span className="font-semibold">{s.open ? `${name} open` : s.holiday ? `${name} closed \u2014 ${s.holiday}` : `${name} closed`}</span>
-      <span className="hidden text-muted md:inline">{s.holiday ? s.label.slice(s.label.indexOf(". ") + 2) : s.label}</span>
+      <span className="hidden font-semibold sm:inline">{s.open ? `${name} open` : s.holiday ? `${name} closed \u2014 ${s.holiday}` : `${name} closed`}</span>
+      <span className="sr-only sm:hidden">{s.open ? `${name} open` : `${name} closed`}</span>
+      <span className="hidden text-muted 2xl:inline">{s.holiday ? s.label.slice(s.label.indexOf(". ") + 2) : s.label}</span>
     </div>
   );
 }
@@ -73,7 +74,7 @@ function ThemeToggle() {
         }
         themeListeners.forEach((l) => l());
       }}
-      className="grid size-8 place-items-center rounded-md border border-line bg-panel text-muted hover:border-accent hover:text-accent"
+      className="grid size-8 shrink-0 place-items-center rounded-md border border-line bg-panel text-muted hover:border-accent hover:text-accent"
       aria-label={`Switch to ${next} theme`}
       title={`Switch to ${next} theme`}
     >
@@ -91,17 +92,68 @@ function ThemeToggle() {
   );
 }
 
+const NAV = [
+  { href: "/", label: "Markets" },
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/trades", label: "Trading simulator" },
+  { href: "/backtest", label: "Backtest" },
+  { href: "/news", label: "News" },
+  { href: "/leaders", label: "Leaders" },
+] as const;
+
+const isActive = (href: string, path: string) =>
+  href === "/" ? path === "/" || path.startsWith("/stock/") : path.startsWith(href);
+
 function NavLink({ href, children }: { href: string; children: string }) {
   const path = usePathname();
-  const active = href === "/" ? path === "/" || path.startsWith("/stock/") : path.startsWith(href);
+  const active = isActive(href, path);
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`rounded-md px-2.5 py-1 text-sm font-medium ${active ? "bg-panel2 text-ink" : "text-muted hover:text-ink"}`}
+      className={`rounded-md px-2.5 py-1 text-sm font-medium whitespace-nowrap ${active ? "bg-panel2 text-ink" : "text-muted hover:text-ink"}`}
     >
       {children}
     </Link>
+  );
+}
+
+/** Below xl the tabs don't fit beside search, so they fold into a menu. */
+function NavMenu() {
+  const path = usePathname();
+  const [open, setOpen] = useState(false);
+  const current = NAV.find((n) => isActive(n.href, path))?.label ?? "Menu";
+  return (
+    <div className="relative xl:hidden" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="flex h-8 items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 text-sm font-medium whitespace-nowrap hover:border-accent"
+      >
+        <span className="hidden sm:inline">{current}</span>
+        <svg aria-hidden viewBox="0 0 24 24" className="size-4 sm:hidden" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+          <path d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+        <span aria-hidden className="hidden text-[10px] text-muted sm:inline">▾</span>
+        <span className="sr-only sm:hidden">Menu</span>
+      </button>
+      {open && (
+        <nav aria-label="Main" className="absolute left-0 z-30 mt-1 w-48 rounded-md border border-line bg-panel p-1 shadow-lg">
+          {NAV.map((n) => (
+            <Link
+              key={n.href}
+              href={n.href}
+              aria-current={isActive(n.href, path) ? "page" : undefined}
+              onClick={() => setOpen(false)}
+              className={`block rounded px-2 py-1.5 text-sm hover:bg-panel2 ${isActive(n.href, path) ? "font-semibold text-ink" : "text-muted"}`}
+            >
+              {n.label}
+            </Link>
+          ))}
+        </nav>
+      )}
+    </div>
   );
 }
 
@@ -123,15 +175,15 @@ function UserMenu() {
   if (!acct.loaded) return <div className="h-8 w-16" aria-hidden />;
   if (!acct.user) {
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-1.5">
         <Link
           href="/login"
-          className="rounded-md border border-line bg-panel px-2.5 py-1 text-sm font-medium text-muted hover:border-accent hover:text-accent"
+          className={`rounded-md border border-line bg-panel px-2.5 py-1 text-sm font-medium whitespace-nowrap text-muted hover:border-accent hover:text-accent ${acct.signupEnabled ? "hidden sm:block" : ""}`}
         >
           Log in
         </Link>
         {acct.signupEnabled && (
-          <Link href="/signup" className="rounded-md bg-accent px-2.5 py-1 text-sm font-semibold text-accentink">
+          <Link href="/signup" className="rounded-md bg-accent px-2.5 py-1 text-sm font-semibold whitespace-nowrap text-accentink">
             Sign up
           </Link>
         )}
@@ -141,12 +193,12 @@ function UserMenu() {
   const canDelete = !acct.isAdmin && !acct.user.isPersona && !acct.impersonatedBy;
   const item = "block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-panel2";
   return (
-    <div className="relative" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
+    <div className="relative shrink-0" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
       <button
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex h-8 max-w-52 items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 text-sm font-medium hover:border-accent"
+        className="flex h-8 max-w-28 sm:max-w-52 items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 text-sm font-medium hover:border-accent"
       >
         <span className="truncate">{acct.user.name.replace(/^Test Persona - /, "")}</span>
         <span aria-hidden className="text-[10px] text-muted">▾</span>
@@ -214,22 +266,22 @@ function UserMenu() {
 
 export function Header() {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-4 border-b border-line bg-panel px-3">
-      <Link href="/" className="flex items-baseline gap-2 whitespace-nowrap">
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-panel px-3 sm:gap-4">
+      <Link href="/" className="flex shrink-0 items-baseline gap-2 whitespace-nowrap">
         <span className="text-base font-bold tracking-tight">Meridian</span>
       </Link>
-      <nav aria-label="Main" className="flex items-center gap-1">
-        <NavLink href="/">Markets</NavLink>
-        <NavLink href="/dashboard">Dashboard</NavLink>
-        <NavLink href="/trades">Trading simulator</NavLink>
-        <NavLink href="/backtest">Backtest</NavLink>
-        <NavLink href="/news">News</NavLink>
-        <NavLink href="/leaders">Leaders</NavLink>
+      <nav aria-label="Main" className="hidden items-center gap-1 xl:flex">
+        {NAV.map((n) => (
+          <NavLink key={n.href} href={n.href}>
+            {n.label}
+          </NavLink>
+        ))}
       </nav>
+      <NavMenu />
       <div className="flex min-w-0 flex-1 justify-center">
         <SearchBox />
       </div>
-      <Suspense fallback={<div className="h-7 w-44 rounded-full border border-line" aria-hidden />}>
+      <Suspense fallback={<div className="hidden h-7 w-32 shrink-0 rounded-full border border-line sm:block" aria-hidden />}>
         <MarketBadge />
       </Suspense>
       <ThemeToggle />

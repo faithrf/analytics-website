@@ -106,7 +106,7 @@ export function NewsView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="-mb-1.5 flex shrink-0 items-center justify-between text-xs text-muted">
+      <div className="-mb-1.5 flex shrink-0 flex-wrap items-center justify-between gap-x-3 text-xs text-muted">
         <span>Global markets, commodities and currencies</span>
         <Freshness
           dataTime={newest(

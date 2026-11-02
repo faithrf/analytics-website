@@ -21,9 +21,9 @@ export function Panel({
       className={`flex min-h-0 flex-col rounded-lg border border-line bg-panel ${className}`}
     >
       {(title || right) && (
-        <header className="flex min-h-10 items-center justify-between gap-3 border-b border-line px-3 py-1">
-          <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-          <div className="flex items-center gap-2">{right}</div>
+        <header className="flex min-h-10 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line px-3 py-1">
+          <h2 className="min-w-0 text-sm font-semibold tracking-tight whitespace-nowrap">{title}</h2>
+          <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">{right}</div>
         </header>
       )}
       <div className={`min-h-0 flex-1 ${bodyClass}`}>{children}</div>
@@ -46,7 +46,7 @@ export function Tabs<T extends string>({
     <div
       role="tablist"
       aria-label={label}
-      className="flex gap-0.5 rounded-md bg-panel2 p-0.5"
+      className="flex max-w-full gap-0.5 overflow-x-auto rounded-md bg-panel2 p-0.5 whitespace-nowrap [scrollbar-width:none]"
     >
       {tabs.map((t) => {
         const active = t.id === value;
@@ -63,7 +63,7 @@ export function Tabs<T extends string>({
               if (e.key === "ArrowLeft")
                 onChange(tabs[(i - 1 + tabs.length) % tabs.length].id);
             }}
-            className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+            className={`shrink-0 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
               active ? "bg-accent text-accentink" : "text-muted hover:text-ink"
             }`}
           >
