@@ -222,6 +222,7 @@ export function Header() {
         <NavLink href="/">Markets</NavLink>
         <NavLink href="/dashboard">Dashboard</NavLink>
         <NavLink href="/trades">Trading simulator</NavLink>
+        <NavLink href="/backtest">Backtest</NavLink>
         <NavLink href="/news">News</NavLink>
         <NavLink href="/leaders">Leaders</NavLink>
       </nav>

@@ -28,20 +28,20 @@ const STATUS: Record<TradeStatus, { label: string; cls: string }> = {
   expired: { label: "Expired", cls: "bg-panel2 text-muted" },
 };
 
-type Mode = "buy" | "short" | "option";
-const MODES: { v: Mode; l: string }[] = [
+export type Mode = "buy" | "short" | "option";
+export const MODES: { v: Mode; l: string }[] = [
   { v: "buy", l: "Buy shares" },
   { v: "short", l: "Short shares" },
   { v: "option", l: "Option" },
 ];
-type OptKind = "buy-call" | "buy-put" | "sell-call" | "sell-put";
-const OPT_KINDS: { v: OptKind; l: string }[] = [
+export type OptKind = "buy-call" | "buy-put" | "sell-call" | "sell-put";
+export const OPT_KINDS: { v: OptKind; l: string }[] = [
   { v: "buy-call", l: "Buy call" },
   { v: "buy-put", l: "Buy put" },
   { v: "sell-call", l: "Sell call" },
   { v: "sell-put", l: "Sell put" },
 ];
-const EXPLAIN: Record<Mode | OptKind, string> = {
+export const EXPLAIN: Record<Mode | OptKind, string> = {
   buy: "Own the shares. You profit if the price rises. The most you can lose is what you put in, if the price goes to zero.",
   short: "Borrow shares and sell them now, then buy them back later. You profit if the price falls. If it keeps rising, losses have no ceiling.",
   option: "",
@@ -59,7 +59,7 @@ const TEN_YEARS_MS = 3650 * DAY_MS;
 const histFrom = (startMs: number, side: Side) => Math.max(Math.min(startMs, Date.now()) - (isOption(side) ? VOL_LOOKBACK_DAYS * DAY_MS : 0), Date.now() - TEN_YEARS_MS + DAY_MS);
 
 /** Small segmented toggle. */
-function Seg<T extends string | boolean>({ options, value, onChange, name }: { options: { v: T; l: string }[]; value: T; onChange: (v: T) => void; name: string }) {
+export function Seg<T extends string | boolean>({ options, value, onChange, name }: { options: { v: T; l: string }[]; value: T; onChange: (v: T) => void; name: string }) {
   return (
     <div role="radiogroup" aria-label={name} className="flex gap-0.5 rounded-md bg-panel2 p-0.5">
       {options.map((o) => (
@@ -81,15 +81,15 @@ function Seg<T extends string | boolean>({ options, value, onChange, name }: { o
 const badgeOf = (t: Trade): string | null =>
   t.side === "long" ? null : t.side === "short" ? "short" : `${t.sold ? "Sold " : ""}${t.side}`.replace(/^./, (c) => c.toUpperCase());
 
-const input = "h-8 w-full rounded-md border border-line bg-bg px-2 text-sm outline-none placeholder:text-muted focus:border-accent";
-const label = "mb-1 block text-xs font-medium text-muted";
+export const input = "h-8 w-full rounded-md border border-line bg-bg px-2 text-sm outline-none placeholder:text-muted focus:border-accent";
+export const label = "mb-1 block text-xs font-medium text-muted";
 
-const isoDay = (ms: number) => {
+export const isoDay = (ms: number) => {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
-const parseDay = (v: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? Date.parse(`${v}T00:00:00Z`) : NaN);
-const fmtDay = (ms: number) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+export const parseDay = (v: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? Date.parse(`${v}T00:00:00Z`) : NaN);
+export const fmtDay = (ms: number) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 /* ---- price history: one fetch per symbol + start day, refreshed every few minutes ---- */
 
@@ -132,7 +132,7 @@ function useHistories(trades: Trade[]) {
 
 /* ---- symbol picker (same search API as the header box, but selects instead of navigating) ---- */
 
-function SymbolPicker({ picked, onPick }: { picked: SearchHit | null; onPick: (h: SearchHit | null) => void }) {
+export function SymbolPicker({ picked, onPick }: { picked: SearchHit | null; onPick: (h: SearchHit | null) => void }) {
   const listId = useId();
   const box = useRef<HTMLDivElement>(null);
   const [q, setQ] = useState("");
@@ -838,7 +838,7 @@ export function TradesView() {
           {stats.winRate === null ? "—" : `${fmtNum(stats.winRate, 0)}%`}
         </Stat>
       </div>
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[19rem_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[22rem_minmax(0,1fr)] xl:grid-cols-[28rem_minmax(0,1fr)]">
         <Panel title="New test trade" bodyClass="flex flex-col gap-3 overflow-auto p-3">
           <NewTradeForm
             add={add}
