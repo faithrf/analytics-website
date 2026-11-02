@@ -6,16 +6,18 @@ import { personaById } from "@/lib/personas";
 import { redisConfig } from "@/lib/sync-store";
 import { parseTrades, type Trade } from "@/lib/trades";
 
-/** Per-user saved data: boards, the Leaders names/tickers they follow, and test trades. */
+/** Per-user saved data: boards, the Leaders names/tickers they follow, starred ready-made boards, and test trades. */
 export interface UserData extends BoardsState {
   follows: string[];
+  stars: string[];
   trades: Trade[];
 }
 
 export const MAX_FOLLOWS = 40;
 const MAX_FOLLOW_LEN = 40;
+export const MAX_STARS = 100;
 
-export function cleanFollows(v: unknown): string[] {
+export function cleanFollows(v: unknown, max = MAX_FOLLOWS): string[] {
   if (!Array.isArray(v)) return [];
   const out: string[] = [];
   for (const x of v) {
@@ -23,12 +25,12 @@ export function cleanFollows(v: unknown): string[] {
     const s = x.replace(/\s+/g, " ").trim().slice(0, MAX_FOLLOW_LEN);
     if (s && !out.some((o) => o.toLowerCase() === s.toLowerCase())) out.push(s);
   }
-  return out.slice(0, MAX_FOLLOWS);
+  return out.slice(0, max);
 }
 
 export function parseUserData(raw: unknown): UserData {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  return { ...parseBoards(JSON.stringify(obj)), follows: cleanFollows(obj.follows), trades: parseTrades(obj.trades) };
+  return { ...parseBoards(JSON.stringify(obj)), follows: cleanFollows(obj.follows), stars: cleanFollows(obj.stars, MAX_STARS), trades: parseTrades(obj.trades) };
 }
 
 /** Merges a PUT body into saved data. Only the fields present change; the rest are kept. */
@@ -40,6 +42,7 @@ export function applyPatch(prev: UserData, body: Record<string, unknown>): UserD
     next.active = b.active;
   }
   if (Array.isArray(body.follows)) next.follows = cleanFollows(body.follows);
+  if (Array.isArray(body.stars)) next.stars = cleanFollows(body.stars, MAX_STARS);
   if (Array.isArray(body.trades)) next.trades = parseTrades(body.trades);
   return next;
 }
@@ -47,7 +50,7 @@ export function applyPatch(prev: UserData, body: Record<string, unknown>): UserD
 /** What a user starts with: a persona's seeded data, or an empty watchlist. */
 export function seedFor(userId: string): UserData {
   const p = personaById(userId);
-  return p ? parseUserData({ boards: p.boards.boards, active: p.boards.active, follows: p.follows }) : { ...defaultState(), follows: [], trades: [] };
+  return p ? parseUserData({ boards: p.boards.boards, active: p.boards.active, follows: p.follows }) : { ...defaultState(), follows: [], stars: [], trades: [] };
 }
 
 interface Store {

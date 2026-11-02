@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import type { QuoteDTO } from "@/lib/yahoo";
 import { MAX_BOARDS, MAX_NAME, type Board } from "@/lib/boards";
 import { BOARD_PRESETS, PRESET_GROUPS } from "@/lib/board-presets";
@@ -8,6 +8,7 @@ import { direction, fmtNum, priceDigits } from "@/lib/format";
 import { displayCode, marketOf, regionOf, toYahoo } from "@/lib/symbols";
 import { useApi } from "@/lib/use-api";
 import { useBoards } from "@/lib/use-boards";
+import { useStars } from "@/lib/use-stars";
 import { useRefreshMsFor } from "@/lib/use-market-status";
 import {
   Change,
@@ -195,6 +196,30 @@ export function BoardsView() {
   );
 }
 
+/** Indexes of presets whose name, group or tickers hold every word ("nvda" finds boards with NVDA.US). */
+function matchPresets(q: string): number[] {
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return BOARD_PRESETS.flatMap((x, j) => {
+    const hay = `${x.name} ${x.group} ${x.ids.map((id) => id.split(".")[0]).join(" ")}`.toLowerCase();
+    return words.every((w) => hay.includes(w)) ? [j] : [];
+  });
+}
+
+function StarButton({ on, name, onToggle, className = "" }: { on: boolean; name: string; onToggle: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={on}
+      aria-label={on ? `Remove ${name} from favourites` : `Add ${name} to favourites`}
+      title={on ? "Unstar" : "Star to keep at the top"}
+      className={`shrink-0 px-1.5 leading-none ${on ? "text-amber-400" : ""} hover:opacity-100 ${className}`}
+    >
+      {on ? "★" : "☆"}
+    </button>
+  );
+}
+
 /** Scrollable list of ready-made dashboards with a live preview of the one picked. */
 function PresetBrowser({
   added,
@@ -206,45 +231,85 @@ function PresetBrowser({
   onAdd: (name: string, ids: string[]) => void;
 }) {
   const [i, setI] = useState(0);
+  const [q, setQ] = useState("");
+  const { isStarred, toggle } = useStars();
+  // starred boards move to a Favourites group at the top; arrows follow the on-screen order
+  const ordered = (m: number[]) => [
+    ...m.filter((j) => isStarred(BOARD_PRESETS[j].name)),
+    ...PRESET_GROUPS.flatMap((g) => m.filter((j) => BOARD_PRESETS[j].group === g && !isStarred(BOARD_PRESETS[j].name))),
+  ];
+  const matches = ordered(matchPresets(q));
+  const favs = matches.filter((j) => isStarred(BOARD_PRESETS[j].name));
+  const groups = PRESET_GROUPS.map((g) => ({
+    g,
+    js: matches.filter((j) => BOARD_PRESETS[j].group === g && !isStarred(BOARD_PRESETS[j].name)),
+  })).filter((x) => x.js.length);
   const p = BOARD_PRESETS[i];
-  const go = (d: number) => setI((x) => (x + d + BOARD_PRESETS.length) % BOARD_PRESETS.length);
+  const go = (d: number) => {
+    if (!matches.length) return;
+    const k = matches.indexOf(i);
+    setI(matches[k < 0 ? 0 : (k + d + matches.length) % matches.length]);
+  };
+  const search = (v: string) => {
+    setQ(v);
+    const m = ordered(matchPresets(v));
+    if (m.length && !m.includes(i)) setI(m[0]);
+  };
   const have = added.has(p.name);
+  const arrows = (e: KeyboardEvent) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      go(e.key === "ArrowDown" ? 1 : -1);
+    }
+  };
   return (
     <div className="flex min-h-0 flex-1 gap-3">
+      <div className="flex w-56 shrink-0 flex-col gap-1.5">
+      <input
+        type="search"
+        value={q}
+        onChange={(e) => search(e.target.value)}
+        onKeyDown={arrows}
+        placeholder="Search name or ticker…"
+        aria-label="Search ready-made dashboards"
+        className="w-full rounded-md border border-line bg-panel px-2.5 py-1.5 text-xs outline-none placeholder:text-muted focus:border-accent"
+      />
       <nav
         aria-label="Ready-made dashboards"
         tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-            e.preventDefault();
-            go(e.key === "ArrowDown" ? 1 : -1);
-          }
-        }}
-        className="w-56 shrink-0 overflow-auto rounded-lg border border-line bg-panel p-1 outline-none focus-visible:border-accent"
+        onKeyDown={arrows}
+        className="min-h-0 flex-1 overflow-auto rounded-lg border border-line bg-panel p-1 outline-none focus-visible:border-accent"
       >
-        {PRESET_GROUPS.map((g) => (
+        {!matches.length && <p className="px-2 py-3 text-xs text-muted">No dashboards match “{q.trim()}”.</p>}
+        {[...(favs.length ? [{ g: "★ Favourites", js: favs }] : []), ...groups].map(({ g, js }) => (
           <div key={g}>
-            <div className="sticky top-0 bg-panel px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wide text-muted uppercase">{g}</div>
-            {BOARD_PRESETS.map((x, j) =>
-              x.group === g ? (
-                <button
+            <div className="sticky top-0 z-10 bg-panel px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wide text-muted uppercase">{g}</div>
+            {js.map((j) => {
+              const x = BOARD_PRESETS[j];
+              const on = isStarred(x.name);
+              return (
+                <div
                   key={x.name}
-                  onClick={() => setI(j)}
                   ref={j === i ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
-                  aria-current={j === i}
-                  className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs ${
-                    j === i ? "bg-accent text-accentink" : "text-ink hover:bg-panel2"
-                  }`}
+                  className={`group flex items-center rounded text-xs ${j === i ? "bg-accent text-accentink" : "text-ink hover:bg-panel2"}`}
                 >
-                  <span className="min-w-0 flex-1 truncate">{x.name}</span>
-                  {added.has(x.name) && <span aria-label="added">✓</span>}
-                  <span className="opacity-60">{x.ids.length}</span>
-                </button>
-              ) : null,
-            )}
+                  <button
+                    onClick={() => setI(j)}
+                    aria-current={j === i}
+                    className="flex min-w-0 flex-1 items-center gap-2 py-1 pl-2 text-left"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{x.name}</span>
+                    {added.has(x.name) && <span aria-label="added">✓</span>}
+                    <span className="opacity-60">{x.ids.length}</span>
+                  </button>
+                  <StarButton on={on} name={x.name} onToggle={() => toggle(x.name)} className={on ? "" : "opacity-0 group-hover:opacity-60 focus-visible:opacity-100"} />
+                </div>
+              );
+            })}
           </div>
         ))}
       </nav>
+      </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex shrink-0 flex-wrap items-center gap-2 rounded-lg border border-line bg-panel px-3 py-2">
           <button onClick={() => go(-1)} aria-label="Previous dashboard" className={smallButton}>
@@ -254,6 +319,7 @@ function PresetBrowser({
             {"›"}
           </button>
           <span className="text-sm font-semibold">{p.name}</span>
+          <StarButton on={isStarred(p.name)} name={p.name} onToggle={() => toggle(p.name)} className="text-sm" />
           <span className="text-xs text-muted">
             {p.group} · {p.ids.length} stocks · {i + 1} of {BOARD_PRESETS.length}
           </span>

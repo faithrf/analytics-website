@@ -12,7 +12,7 @@ export async function GET() {
   return json(await getUserData(who.user.id));
 }
 
-/** PUT /api/me/data { boards?, active?, follows?, trades? } - merges into the user's saved data and reports the changes. */
+/** PUT /api/me/data { boards?, active?, follows?, stars?, trades? } - merges into the user's saved data and reports the changes. */
 export async function PUT(req: NextRequest) {
   if (!sameOrigin(req)) return json({ error: "forbidden", message: "Cross-site request blocked." }, 403);
   const who = await getWho();
