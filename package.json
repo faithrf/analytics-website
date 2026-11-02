@@ -1,6 +1,6 @@
 {
   "name": "asx-dashboard",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -10,7 +10,9 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
-    "verify-tickers": "tsx scripts/verify-tickers.ts"
+    "verify-tickers": "tsx scripts/verify-tickers.ts",
+    "bump:small": "npm version minor --no-git-tag-version",
+    "bump:big": "npm version major --no-git-tag-version"
   },
   "dependencies": {
     "@upstash/redis": "^1.40.0",

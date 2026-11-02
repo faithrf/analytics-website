@@ -5,7 +5,7 @@ export function Footer() {
     <footer className="flex h-7 shrink-0 items-center justify-between gap-4 border-t border-line bg-panel px-3 text-xs text-muted">
       <span className="flex min-w-0 gap-1">
         <span className="truncate">
-          © 2026 Meridian · Hobby project. Data delayed ~20 min, may be wrong. General information only, not financial advice.
+          © 2026 Meridian v{process.env.NEXT_PUBLIC_APP_VERSION} · Hobby project. Data delayed ~20 min, may be wrong. General information only, not financial advice.
         </span>
         <Link href="/legal" className="shrink-0 text-accent hover:underline">
           Disclaimer and privacy
