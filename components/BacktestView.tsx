@@ -307,6 +307,9 @@ export function BacktestView() {
 
   const firstMs = bars ? bars[0].t : 0;
   const lastMs = bars ? bars[bars.length - 1].t : 0;
+  // presets cover start dates whose trades have finished: they end one hold before the latest price
+  const rangeEnd = dayStart(lastMs - (Math.round(Number(hold)) || 0) * DAY_MS);
+  const rangeStart = years !== null ? rangeEnd - Math.round(years * 365) * DAY_MS : NaN;
 
   const pickRange = (y: number) => {
     setYears(y);
@@ -341,8 +344,8 @@ export function BacktestView() {
       if (s > latest) return { error: `A ${days}-day trade from that date hasn't finished yet. Pick a date before ${fmtDay(latest)}.` };
       starts = [s];
     } else {
-      const f = years !== null ? dayStart(lastMs - years * 365 * DAY_MS) : parseDay(from);
-      const t = years !== null ? latest : parseDay(to);
+      const f = years !== null ? rangeStart : parseDay(from);
+      const t = years !== null ? rangeEnd : parseDay(to);
       if (!Number.isFinite(f) || !Number.isFinite(t)) return { error: "Choose both dates." };
       starts = startDates(Math.max(f, earliest), Math.min(t, latest), step);
       if (!starts.length) return { error: "No finished trades in that range. Widen it or shorten the hold." };
@@ -370,7 +373,7 @@ export function BacktestView() {
     }
     if (!runs.length) return { error: "No finished trades for those settings." };
     return { runs };
-  }, [bars, amount, hold, strikePct, target, stop, option, sold, mode, side, period, single, years, from, to, step, firstMs, lastMs, picked]);
+  }, [bars, amount, hold, strikePct, target, stop, option, sold, mode, side, period, single, years, from, to, step, firstMs, lastMs, rangeStart, rangeEnd, picked]);
 
   const runs = sim && "runs" in sim ? sim.runs : null;
   const stats = useMemo(() => {
@@ -493,11 +496,11 @@ export function BacktestView() {
                     <input
                       type="date"
                       className={input}
-                      value={years !== null && bars ? isoUtc(lastMs - years * 365 * DAY_MS) : from}
+                      value={years !== null && bars ? isoUtc(rangeStart) : from}
                       onChange={(e) => {
                         setYears(null);
                         setFrom(e.target.value);
-                        if (!to && bars) setTo(isoUtc(lastMs));
+                        if (!to && bars) setTo(isoUtc(rangeEnd));
                         setSelected(null);
                       }}
                     />
@@ -507,9 +510,9 @@ export function BacktestView() {
                     <input
                       type="date"
                       className={input}
-                      value={years !== null && bars ? isoUtc(lastMs) : to}
+                      value={years !== null && bars ? isoUtc(rangeEnd) : to}
                       onChange={(e) => {
-                        if (years !== null && bars) setFrom(isoUtc(lastMs - years * 365 * DAY_MS));
+                        if (years !== null && bars) setFrom(isoUtc(rangeStart));
                         setYears(null);
                         setTo(e.target.value);
                         setSelected(null);
