@@ -63,6 +63,13 @@ export default function SignupPage() {
               {busy ? "Creating…" : "Create account"}
             </button>
             <p className="text-xs text-muted">
+              By creating an account you accept the{" "}
+              <Link href="/legal" className="text-accent hover:underline">
+                disclaimer, terms and privacy notice
+              </Link>
+              .
+            </p>
+            <p className="text-xs text-muted">
               Have an account? <Link href="/login" className="text-accent hover:underline">Log in</Link>
             </p>
           </form>

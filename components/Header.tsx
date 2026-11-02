@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
-import { logout, trackClient, useAccount, whenAccountLoaded } from "@/lib/use-account";
+import { deleteAccount, logout, trackClient, useAccount, whenAccountLoaded } from "@/lib/use-account";
 import { isRegion, region, type RegionId } from "@/lib/markets";
 import { regionOf } from "@/lib/symbols";
 import { useMarketStatus } from "@/lib/use-market-status";
@@ -108,6 +108,10 @@ function NavLink({ href, children }: { href: string; children: string }) {
 function UserMenu() {
   const acct = useAccount();
   const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const path = usePathname();
   useEffect(() => {
     let live = true;
@@ -134,6 +138,7 @@ function UserMenu() {
       </div>
     );
   }
+  const canDelete = !acct.isAdmin && !acct.user.isPersona && !acct.impersonatedBy;
   const item = "block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-panel2";
   return (
     <div className="relative" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
@@ -157,6 +162,50 @@ function UserMenu() {
           <button role="menuitem" className={item} onClick={() => void logout()}>
             Log out
           </button>
+          {canDelete && (
+            <button role="menuitem" className={`${item} text-loss`} onClick={() => setDeleting((d) => !d)} aria-expanded={deleting}>
+              Delete account
+            </button>
+          )}
+          {canDelete && deleting && (
+            <form
+              className="mt-1 space-y-2 border-t border-line p-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setBusy(true);
+                setError("");
+                const r = await deleteAccount(password);
+                if (!r.ok) {
+                  setError(r.message ?? "Could not delete the account.");
+                  setBusy(false);
+                }
+              }}
+            >
+              <p className="text-xs text-muted">This permanently deletes your account, dashboards and followed leaders. It can&apos;t be undone.</p>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Current password"
+                autoComplete="current-password"
+                aria-label="Current password"
+                required
+                className="w-full rounded-md border border-line bg-panel2 px-2 py-1 text-sm"
+              />
+              {error && (
+                <p role="alert" className="text-xs text-loss">
+                  {error}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={busy || !password}
+                className="w-full rounded-md bg-loss px-2 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {busy ? "Deleting..." : "Delete my account"}
+              </button>
+            </form>
+          )}
         </div>
       )}
     </div>

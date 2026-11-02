@@ -45,6 +45,8 @@ interface Store {
   setNx(key: string, value: string): Promise<boolean>;
   add(setKey: string, member: string): Promise<void>;
   members(setKey: string): Promise<string[]>;
+  del(key: string): Promise<void>;
+  remove(setKey: string, member: string): Promise<void>;
 }
 
 function redisStore(cfg: { url: string; token: string }): Store {
@@ -65,6 +67,12 @@ function redisStore(cfg: { url: string; token: string }): Store {
     },
     async members(setKey) {
       return redis.smembers(setKey);
+    },
+    async del(key) {
+      await redis.del(key);
+    },
+    async remove(setKey, member) {
+      await redis.srem(setKey, member);
     },
   };
 }
@@ -87,6 +95,8 @@ function memoryStore(): Store {
       set.add(m);
     },
     members: async (s) => [...(mem.sets.get(s) ?? [])],
+    del: async (k) => void mem.kv.delete(k),
+    remove: async (s, m) => void mem.sets.get(s)?.delete(m),
   };
 }
 
@@ -145,6 +155,17 @@ export async function verifyLogin(email: string, password: string): Promise<Acco
   const acct = await getAccountByEmail(email).catch(() => null);
   const ok = verifyPassword(password, acct?.passwordHash ?? DUMMY_HASH);
   return acct && ok ? acct : null;
+}
+
+/** Permanently removes the account, its email lookup and its index entry. Returns false when there was nothing to delete. */
+export async function deleteAccount(id: string): Promise<boolean> {
+  const s = getAccountStore();
+  const acct = await getAccount(id);
+  if (!s || !acct) return false;
+  await s.del(accountKey(id));
+  await s.del(emailKey(acct.email));
+  await s.remove(INDEX, id);
+  return true;
 }
 
 /** All accounts, newest first. Public fields only. */

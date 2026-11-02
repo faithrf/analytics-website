@@ -103,6 +103,11 @@ export async function resetUserData(userId: string): Promise<boolean> {
   return setUserData(userId, seedFor(userId));
 }
 
+/** Removes a user's saved boards and follows entirely. */
+export async function deleteUserData(userId: string): Promise<void> {
+  await getUserStore()?.del(key(userId));
+}
+
 /** Restores a persona to its seed. The admin has no seed to reset to, so only personas. */
 export async function resetPersona(personaId: string): Promise<boolean> {
   if (!personaById(personaId) || personaId === ADMIN_ID) return false;

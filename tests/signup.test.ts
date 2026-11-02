@@ -8,11 +8,13 @@ import { NextRequest } from "next/server";
 import { hashPassword, verifyPassword, verifySession } from "@/lib/session";
 import { randomBytes } from "node:crypto";
 import { COOKIE } from "@/lib/auth";
-import { listAccounts, newAccountId, isAccountId } from "@/lib/accounts";
+import { listAccounts, newAccountId, isAccountId, deleteAccount, getAccount, getAccountByEmail } from "@/lib/accounts";
+import { deleteUserData, getUserData, setUserData } from "@/lib/user-store";
 import { PERSONA_IDS } from "@/lib/personas";
 import { POST as signup } from "@/app/api/auth/signup/route";
 import { POST as login } from "@/app/api/auth/login/route";
 import { GET as me } from "@/app/api/auth/me/route";
+import { DELETE as deleteMe } from "@/app/api/me/route";
 import { GET as myData } from "@/app/api/me/data/route";
 import { POST as impersonate } from "@/app/api/admin/impersonate/route";
 
@@ -94,6 +96,41 @@ describe("signup and login", () => {
     vi.stubEnv("SIGNUP_DISABLED", "1");
     expect((await signup(post("/api/auth/signup", { email: "off@example.test", password: "password123" }))).status).toBe(403);
     expect((await (await me()).json()).signupEnabled).toBe(false);
+  });
+
+  it("deletes an account, its email lookup, index entry and saved data", async () => {
+    const res = await signup(post("/api/auth/signup", { email: "gone@example.test", password: "password123" }));
+    const id = sessionOf(res)!.subjectId;
+    expect(await getAccountByEmail("gone@example.test")).not.toBeNull();
+    await setUserData(id, { ...(await getUserData(id)), follows: ["Someone"] });
+    expect(await deleteAccount(id)).toBe(true);
+    await deleteUserData(id);
+    expect(await getAccount(id)).toBeNull();
+    expect(await getAccountByEmail("gone@example.test")).toBeNull();
+    expect((await listAccounts()).find((a) => a.id === id)).toBeUndefined();
+    expect((await getUserData(id)).follows).toEqual([]);
+    expect(await deleteAccount(id)).toBe(false);
+    // the email is free to sign up again
+    expect((await signup(post("/api/auth/signup", { email: "gone@example.test", password: "password123" }))).status).toBe(200);
+  });
+
+  it("DELETE /api/me needs the password and refuses admin and impersonation", async () => {
+    const res = await signup(post("/api/auth/signup", { email: "del@example.test", password: "password123" }));
+    const id = sessionOf(res)!.subjectId;
+    const del = (body: unknown) =>
+      deleteMe(new NextRequest("http://localhost/api/me", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
+    const { signSession } = await import("@/lib/session");
+    cookieValue = signSession({ actorId: "admin", subjectId: id }, SECRET);
+    expect((await del({ password: "password123" })).status).toBe(403);
+    cookieValue = signSession({ actorId: "admin", subjectId: "admin" }, SECRET);
+    expect((await del({ password: "password123" })).status).toBe(403);
+    cookieValue = signSession({ actorId: id, subjectId: id }, SECRET);
+    expect((await del({ password: "wrong-pass-1" })).status).toBe(401);
+    expect(await getAccount(id)).not.toBeNull();
+    const ok = await del({ password: "password123" });
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("set-cookie")).toMatch(/meridian_session=;/);
+    expect(await getAccount(id)).toBeNull();
   });
 
   it("lets only the admin impersonate an account", async () => {

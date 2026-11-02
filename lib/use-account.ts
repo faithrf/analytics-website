@@ -94,6 +94,22 @@ export async function logout() {
   if (r.ok) window.location.assign("/");
   return r;
 }
+/** Permanently deletes the signed-in user's own account after re-checking the password. */
+export async function deleteAccount(password: string) {
+  try {
+    const res = await fetch("/api/me", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password }),
+      cache: "no-store",
+    });
+    const d = (await res.json().catch(() => ({}))) as { message?: string };
+    if (res.ok) window.location.assign("/");
+    return { ok: res.ok, message: d.message };
+  } catch {
+    return { ok: false, message: "Could not reach the server." };
+  }
+}
 export async function impersonate(personaId: string | null) {
   const r = await post("/api/admin/impersonate", { personaId });
   if (r.ok) window.location.assign(personaId ? "/dashboard" : "/admin");
