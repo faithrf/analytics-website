@@ -409,7 +409,7 @@ export function BacktestView() {
         <strong className="font-semibold text-ink">Backtest: what would have happened.</strong> Replays a trade against real daily prices (Yahoo, last 10 years). Option prices are
         Black-Scholes estimates from past volatility, not real quotes. Ignores fees, dividends and tax. Past results don&apos;t predict future ones.
       </p>
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[22rem_minmax(0,1fr)] xl:grid-cols-[26rem_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[22rem_minmax(0,1fr)] xl:grid-cols-[26rem_minmax(0,1fr)]">
         <Panel title="Backtest setup" bodyClass="flex flex-col gap-3 overflow-auto p-3">
           <div>
             <span className={label}>Stock</span>

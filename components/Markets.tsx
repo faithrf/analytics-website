@@ -52,7 +52,7 @@ export function Markets({ regionId }: { regionId: RegionId }) {
   const movers = useApi<MoversData>(`/api/movers?region=${regionId}`, refresh);
 
   return (
-    <div className="grid h-full min-h-0 gap-3 lg:grid-cols-12 lg:grid-rows-1">
+    <div className="grid h-full min-h-0 grid-cols-1 gap-3 lg:grid-cols-12 lg:grid-rows-1">
       <div className="flex min-h-0 flex-col gap-3 lg:col-span-8">
         <div className="flex shrink-0 items-center justify-between gap-3">
           <Tabs
@@ -65,7 +65,7 @@ export function Markets({ regionId }: { regionId: RegionId }) {
             }
             label="Market"
           />
-          <span className="truncate text-xs text-muted">
+          <span className="hidden truncate text-xs text-muted sm:block">
             Prices in {region(regionId).currency}
           </span>
         </div>
@@ -141,9 +141,9 @@ function MoversPanel({
               <th className="px-3 py-1.5 text-left font-medium">Code</th>
               <th className="px-2 py-1.5 text-left font-medium">Name</th>
               <th className="px-2 py-1.5 text-right font-medium">Price</th>
-              <th className="px-2 py-1.5 text-right font-medium">Change</th>
+              <th className="hidden px-2 py-1.5 text-right font-medium sm:table-cell">Change</th>
               <th className="px-2 py-1.5 text-right font-medium">% Change</th>
-              <th className="px-3 py-1.5 text-right font-medium">Volume</th>
+              <th className="hidden px-3 py-1.5 text-right font-medium sm:table-cell">Volume</th>
             </tr>
           </thead>
           <tbody>
@@ -154,25 +154,25 @@ function MoversPanel({
               >
                 <td className="px-3 py-1.5">
                   <Link
-                    href={`/stock/${r.code}`}
+                    href={`/stock/${encodeURIComponent(r.code)}`}
                     className="font-semibold text-accent hover:underline"
                   >
                     {displayCode(r.code)}
                   </Link>
                 </td>
-                <td className="max-w-[260px] truncate px-2 py-1.5 text-muted">
+                <td className="max-w-[120px] truncate px-2 py-1.5 text-muted sm:max-w-[260px]">
                   {r.name}
                 </td>
                 <td className="px-2 py-1.5 text-right">
                   {fmtNum(r.price, priceDigits(r.price))}
                 </td>
-                <td className="px-2 py-1.5 text-right">
+                <td className="hidden px-2 py-1.5 text-right sm:table-cell">
                   <Change value={r.change} digits={priceDigits(r.price)} />
                 </td>
                 <td className="px-2 py-1.5 text-right font-medium">
                   <Change pct={r.changePct} showValue={false} />
                 </td>
-                <td className="px-3 py-1.5 text-right text-muted">
+                <td className="hidden px-3 py-1.5 text-right text-muted sm:table-cell">
                   {fmtCompact(r.volume)}
                 </td>
               </tr>
@@ -196,7 +196,7 @@ function SectorHeatmap({
   const sectors = data?.sectors ?? [];
   return (
     <Panel
-      className="min-h-[220px] flex-[1.15]"
+      className="min-h-[220px] flex-none lg:flex-[1.15]"
       title="Sectors, average % change"
       right={
         data && (
@@ -227,7 +227,7 @@ function SectorHeatmap({
       ) : sectors.length === 0 ? (
         <p className="p-2 text-sm text-muted">No sector data available.</p>
       ) : (
-        <ul className="grid h-full auto-rows-fr grid-cols-3 gap-1.5">
+        <ul className="grid auto-rows-fr grid-cols-2 gap-1.5 sm:grid-cols-3 lg:h-full">
           {sectors.map((s) => {
             const dir = direction(s.avgPct);
             const strength = Math.min(1, Math.abs(s.avgPct) / 2); // saturates at +/-2%
@@ -240,7 +240,7 @@ function SectorHeatmap({
             return (
               <li
                 key={s.sector}
-                className="flex min-h-0 flex-col justify-between rounded-md border border-line px-2 py-1.5"
+                className="flex flex-col justify-between rounded-md border border-line px-2 py-1.5 lg:min-h-0"
                 style={{
                   background: `color-mix(in oklab, ${base} ${Math.round(10 + strength * 32)}%, var(--panel))`,
                 }}

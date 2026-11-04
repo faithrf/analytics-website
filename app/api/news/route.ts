@@ -5,7 +5,7 @@ import { getNews } from "@/lib/yahoo";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/news?code=BHP (or AAPL.US, VOD.L) */
+/** GET /api/news?code=BHP (or AAPL.US, VOD.L, CL=F, ^GSPC; futures and indices) */
 export async function GET(req: NextRequest) {
   return respond(async () => {
     const code = (req.nextUrl.searchParams.get("code") ?? "").toUpperCase();

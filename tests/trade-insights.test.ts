@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { greeks, hitRate, impliedMove, monthChange, moveStats, percentile, rangePosition, tradingDaysBetween, windowMoves } from "@/lib/trade-insights";
+import { expiryCloseMs, greeks, hitRate, impliedVol, impliedMove, monthChange, moveStats, percentile, rangePosition, tradingDaysBetween, windowMoves } from "@/lib/trade-insights";
 import { bsPut, DAY_MS } from "@/lib/trades";
 
 describe("tradingDaysBetween", () => {
@@ -66,5 +66,27 @@ describe("impliedMove / greeks", () => {
   it("returns null on bad inputs", () => {
     expect(greeks(true, 100, 100, 0, 0.04, 0.3)).toBeNull();
     expect(greeks(true, 100, 100, 1, 0.04, 0)).toBeNull();
+  });
+});
+
+describe("one-day ATM option (MSFT 507.12, strike 507.50 call, premium 6.30)", () => {
+  const t = 1 / 365;
+  it("backs implied vol out of the price", () => {
+    const iv = impliedVol(true, 6.3, 507.12, 507.5, t, 0.04);
+    expect(iv).toBeGreaterThan(0.5);
+    expect(iv).toBeLessThan(0.65);
+  });
+  it("gives position theta near the whole premium and delta near 0.5", () => {
+    const iv = impliedVol(true, 6.3, 507.12, 507.5, t, 0.04)!;
+    const g = greeks(true, 507.12, 507.5, t, 0.04, iv)!;
+    const theta = Math.abs(g.thetaDay) * (100 / 6.3);
+    expect(theta).toBeGreaterThan(90);
+    expect(theta).toBeLessThan(105);
+    expect(g.delta).toBeGreaterThan(0.45);
+    expect(g.delta).toBeLessThan(0.55);
+  });
+  it("puts expiry at 16:00 New York", () => {
+    expect(new Date(expiryCloseMs(Date.UTC(2026, 10, 4))).toISOString()).toBe("2026-11-04T21:00:00.000Z");
+    expect(new Date(expiryCloseMs(Date.UTC(2026, 6, 6))).toISOString()).toBe("2026-07-06T20:00:00.000Z");
   });
 });

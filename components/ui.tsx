@@ -18,7 +18,7 @@ export function Panel({
 }) {
   return (
     <section
-      className={`flex min-h-0 flex-col rounded-lg border border-line bg-panel ${className}`}
+      className={`flex min-h-0 min-w-0 flex-col rounded-lg border border-line bg-panel ${className}`}
     >
       {(title || right) && (
         <header className="flex min-h-10 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line px-3 py-1">
@@ -26,7 +26,8 @@ export function Panel({
           <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2">{right}</div>
         </header>
       )}
-      <div className={`min-h-0 flex-1 ${bodyClass}`}>{children}</div>
+      {/* relative: screen-reader-only text in a scrolling table must not widen the page */}
+      <div className={`relative min-h-0 flex-1 ${bodyClass}`}>{children}</div>
     </section>
   );
 }
@@ -326,7 +327,7 @@ export function Freshness({
   );
   const NL = "\n";
   const cls =
-    "inline-flex min-w-0 items-center gap-1.5 text-xs whitespace-nowrap text-muted";
+    "inline-flex max-w-full min-w-0 items-center gap-1.5 text-xs whitespace-nowrap text-muted";
   return onRefresh ? (
     <button
       type="button"

@@ -72,7 +72,20 @@ export interface Trade {
   /** real option only: the contract's value per share when closed manually */
   closeOptValue?: number;
   createdMs: number;
+  /** Journal: why the trade was taken (required for new trades; absent on older saved ones). */
+  reason?: string;
+  /** Journal: review done after the trade finished. */
+  review?: TradeReview;
 }
+
+export type Verdict = "yes" | "partly" | "no";
+export const VERDICTS: Verdict[] = ["yes", "partly", "no"];
+export interface TradeReview {
+  /** "Was I right for the right reason?" */
+  verdict: Verdict;
+  note?: string;
+}
+export const MAX_REASON_LEN = 500;
 
 export interface Bar {
   t: number;
@@ -230,6 +243,12 @@ export function parseTrades(raw: unknown): Trade[] {
     if (finite(r.closedMs) && r.closedMs >= 0 && r.closedMs <= MAX_MS && positive(r.closePrice)) {
       trade.closedMs = r.closedMs;
       trade.closePrice = r.closePrice;
+    }
+    if (typeof r.reason === "string" && r.reason.trim()) trade.reason = r.reason.trim().slice(0, MAX_REASON_LEN);
+    const rv = r.review as Record<string, unknown> | undefined;
+    if (rv && typeof rv === "object" && VERDICTS.includes(rv.verdict as Verdict)) {
+      trade.review = { verdict: rv.verdict as Verdict };
+      if (typeof rv.note === "string" && rv.note.trim()) trade.review.note = rv.note.trim().slice(0, MAX_REASON_LEN);
     }
     out.push(trade);
   }

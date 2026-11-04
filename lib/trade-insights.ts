@@ -1,4 +1,4 @@
-import { d1d2, DAY_MS, normCdf } from "@/lib/trades";
+import { bsOption, d1d2, DAY_MS, normCdf } from "@/lib/trades";
 
 /** Horizon (trading days) used for plain shares, which have no expiry: one week. */
 export const SHARE_HORIZON = 5;
@@ -93,13 +93,37 @@ export interface Greeks {
 export function greeks(call: boolean, s: number, k: number, t: number, r: number, sigma: number): Greeks | null {
   if (!(s > 0) || !(k > 0) || !(t > 0) || !(sigma > 0)) return null;
   const [d1, d2] = d1d2(s, k, t, r, sigma);
-  const pdf = Math.exp(-(d1 * d1) / 2) / Math.sqrt(2 * Math.PI);
-  const decay = -(s * pdf * sigma) / (2 * Math.sqrt(t));
-  const carry = r * k * Math.exp(-r * t);
-  const thetaYear = call ? decay - carry * normCdf(d2) : decay + carry * normCdf(-d2);
+  // value the position loses over the next calendar day (all of it when under a day is left);
+  // the instantaneous BS theta understates this badly close to expiry
+  const thetaDay = bsOption(call, s, k, Math.max(t - 1 / 365, 0), r, sigma) - bsOption(call, s, k, t, r, sigma);
   return {
     delta: call ? normCdf(d1) : normCdf(d1) - 1,
     probItm: call ? normCdf(d2) : normCdf(-d2),
-    thetaDay: thetaYear / 365,
+    thetaDay,
   };
+}
+
+/** Smallest time to expiry used anywhere in the analytics: one hour, in years. */
+export const MIN_T = 1 / (365 * 24);
+
+/** Exchange close (16:00 America/New_York) on the calendar day whose UTC midnight is `dayMs`. */
+export function expiryCloseMs(dayMs: number): number {
+  const fmt = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour12: false, hour: "numeric", timeZoneName: "short" });
+  // 20:00 UTC is 16:00 in EDT and 15:00 in EST; the zone name at noon tells which applies
+  const edt = fmt.formatToParts(new Date(dayMs + 12 * 3_600_000)).find((p) => p.type === "timeZoneName")?.value === "EDT";
+  return dayMs + (edt ? 20 : 21) * 3_600_000;
+}
+
+/** Implied volatility that makes Black-Scholes equal `price` (bisection). Null when the price is outside what 1%-500% vol can give. */
+export function impliedVol(call: boolean, price: number, s: number, k: number, t: number, r: number): number | null {
+  if (!(price > 0) || !(s > 0) || !(k > 0) || !(t > 0)) return null;
+  let lo = 0.01;
+  let hi = 5;
+  if (price < bsOption(call, s, k, t, r, lo) || price > bsOption(call, s, k, t, r, hi)) return null;
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2;
+    if (bsOption(call, s, k, t, r, mid) < price) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
 }

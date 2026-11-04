@@ -87,7 +87,7 @@ export function PinnedPanel() {
               <span key={c}>
                 {i > 0 && ", "}
                 <Link
-                  href={`/stock/${c}`}
+                  href={`/stock/${encodeURIComponent(c)}`}
                   className="font-semibold text-accent hover:underline"
                 >
                   {displayCode(c)}
@@ -117,7 +117,7 @@ export function PinnedPanel() {
                 className="flex items-center gap-2 border-b border-line/60 px-3 py-1.5 text-sm last:border-0"
               >
                 <Link
-                  href={`/stock/${id}`}
+                  href={`/stock/${encodeURIComponent(id)}`}
                   className="w-16 truncate font-semibold text-accent hover:underline"
                 >
                   {displayCode(id)}

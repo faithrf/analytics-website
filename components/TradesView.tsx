@@ -4,13 +4,15 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "rea
 import { fmtNum, priceDigits } from "@/lib/format";
 import { toYahoo } from "@/lib/symbols";
 import { midPrice, type ContractQuote, type OptionChain } from "@/lib/options";
-import { greeks, hitRate, impliedMove, monthChange, moveStats, rangePosition, SHARE_HORIZON, tradingDaysBetween } from "@/lib/trade-insights";
-import { bsOption, DAY_MS, DEFAULT_SIGMA, evaluate, histVol, RISK_FREE, isOption, MAX_AMOUNT, MAX_EXPIRY_MS, MAX_SOLD_STOP_PCT, MAX_STOP_PCT, MAX_TARGET_PCT, MAX_TRADES, MAX_SIGMA, MIN_SIGMA, summarise, todayStartMs, VOL_LOOKBACK_DAYS, type Bar, type Side, type Trade, type TradeResult, type TradeStatus } from "@/lib/trades";
+import { expiryCloseMs, greeks, hitRate, impliedMove, impliedVol, MIN_T, monthChange, moveStats, rangePosition, SHARE_HORIZON, tradingDaysBetween } from "@/lib/trade-insights";
+import { bsOption, DAY_MS, DEFAULT_SIGMA, evaluate, histVol, RISK_FREE, YEAR_MS, isOption, MAX_AMOUNT, MAX_EXPIRY_MS, MAX_SOLD_STOP_PCT, MAX_STOP_PCT, MAX_REASON_LEN, MAX_TARGET_PCT, MAX_TRADES, MAX_SIGMA, MIN_SIGMA, summarise, todayStartMs, VOL_LOOKBACK_DAYS, type Bar, type Side, type Trade, type TradeResult, type TradeStatus } from "@/lib/trades";
 import { useAccount } from "@/lib/use-account";
 import { useApi } from "@/lib/use-api";
 import { useTrades } from "@/lib/use-trades";
 import type { QuoteDTO, SearchHit } from "@/lib/yahoo";
 import { Change, Panel, Skeleton, Tabs, useNow } from "@/components/ui";
+import { TradeRisk } from "@/components/TradeRisk";
+import { TradeJournal } from "@/components/TradeJournal";
 
 const TABS = [
   { id: "open", label: "Open" },
@@ -269,6 +271,7 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
   const [end, setEnd] = useState("");
   const [target, setTarget] = useState("");
   const [stop, setStop] = useState("");
+  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const today = now ? isoDay(now) : undefined;
@@ -278,23 +281,27 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
   const isSold = option && sold;
 
   // Real option chain: only for an option started Today. No chain (common for ASX) -> estimate inputs.
-  const chainKey = option && !past && picked ? `${picked.id}|${realExpiry ?? ""}` : null;
+  // realExpiry is the chosen expiry day (UTC midnight). Only a day Yahoo lists is fetched with `date`; any other day reuses the nearest chain for spot and strikes.
+  const flr = (ms: number) => Math.floor(ms / DAY_MS) * DAY_MS;
+  const knownExp = chainRes && picked && chainRes.key.startsWith(`${picked.id}|`) ? (chainRes.chain?.expiries ?? []) : [];
+  const fetchMs = realExpiry !== null ? (knownExp.find((ms) => flr(ms) === realExpiry) ?? null) : null;
+  const chainKey = option && !past && picked ? `${picked.id}|${fetchMs ?? ""}` : null;
   useEffect(() => {
     if (!chainKey || !picked) return;
     const ctrl = new AbortController();
     void (async () => {
       let chain: OptionChain | null = null;
       try {
-        const q = `symbol=${encodeURIComponent(toYahoo(picked.id))}${realExpiry !== null ? `&date=${realExpiry}` : ""}`;
+        const q = `symbol=${encodeURIComponent(toYahoo(picked.id))}${fetchMs !== null ? `&date=${fetchMs}` : ""}`;
         const res = await fetch(`/api/options?${q}`, { signal: ctrl.signal });
         const body = (await res.json().catch(() => null)) as OptionChain | null;
         if (res.ok && body && Array.isArray(body.expiries) && Array.isArray(body.strikes)) {
           chain = body;
           // the nearest expiry may be today or already past the 1-day minimum: move on to the first usable one
           const first = todayStartMs(Date.now()) + DAY_MS;
-          if (realExpiry === null && body.expiry !== null && Math.floor(body.expiry / DAY_MS) * DAY_MS < first) {
-            const next = body.expiries.find((ms) => Math.floor(ms / DAY_MS) * DAY_MS >= first);
-            if (next !== undefined) return setRealExpiry(next);
+          if (realExpiry === null && body.expiry !== null && flr(body.expiry) < first) {
+            const next = body.expiries.find((ms) => flr(ms) >= first);
+            if (next !== undefined) return setRealExpiry(flr(next));
           }
         }
       } catch (e) {
@@ -307,41 +314,28 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
   }, [chainKey]);
   const chain = chainRes?.key === chainKey ? chainRes.chain : null;
   const chainLoading = !!chainKey && chainRes?.key !== chainKey;
-  const listed = useMemo(() => {
-    const t0 = now ? todayStartMs(now) : 0;
-    return (chain?.expiries ?? []).map((ms) => ({ ms, day: Math.floor(ms / DAY_MS) * DAY_MS })).filter((e) => e.day >= t0 + DAY_MS && e.day <= t0 + MAX_EXPIRY_MS);
-  }, [chain, now]);
-  const expirySel = chain?.expiry != null ? Math.floor(chain.expiry / DAY_MS) * DAY_MS : null;
-  const useReal = !!chain && chain.strikes.length > 0 && listed.some((e) => e.day === expirySel);
+  const t0 = now ? todayStartMs(now) : 0;
+  const listedDays = useMemo(() => new Set((chain?.expiries ?? []).map(flr).filter((d) => d >= t0 + DAY_MS && d <= t0 + MAX_EXPIRY_MS)), [chain, t0]);
+  // every weekday from tomorrow out to the furthest Yahoo expiry (2 years when none), plus every listed day
+  const days = useMemo(() => {
+    if (!now || !chain || chain.strikes.length === 0) return [];
+    const last = listedDays.size > 0 ? Math.max(...listedDays) : t0 + MAX_EXPIRY_MS;
+    const out = new Set(listedDays);
+    for (let d = t0 + DAY_MS; d <= last; d += DAY_MS) {
+      const wd = new Date(d).getUTCDay();
+      if (wd !== 0 && wd !== 6) out.add(d);
+    }
+    return [...out].sort((x, y) => x - y);
+  }, [chain, listedDays, t0, now]);
+  const wanted = realExpiry ?? (chain?.expiry != null ? flr(chain.expiry) : null);
+  const expirySel = wanted !== null && days.includes(wanted) ? wanted : (days[0] ?? null);
+  const useReal = !!chain && chain.strikes.length > 0 && expirySel !== null && listedDays.has(expirySel) && chain.expiry != null && flr(chain.expiry) === expirySel;
+  const estMode = !!chain && chain.strikes.length > 0 && expirySel !== null && !useReal;
   const legOf = (row: OptionChain["strikes"][number]) => (optSide === "call" ? row.call : row.put);
   const strikeRows = useReal ? chain.strikes.filter((r) => legOf(r)) : [];
   const atm = strikeRows.reduce<(typeof strikeRows)[number] | null>((best, r) => (best === null || Math.abs(r.strike - (chain?.spot ?? 0)) < Math.abs(best.strike - (chain?.spot ?? 0)) ? r : best), null);
   const rowSel = strikeRows.find((r) => String(r.strike) === realStrike) ?? atm;
   const legSel = rowSel ? legOf(rowSel) : null;
-  const fmtPrem = (v: number | null) => (v === null ? "n/a" : fmtNum(v, v < 1 ? 3 : 2));
-  const pickedQuote = useApi<{ quotes: QuoteDTO[] }>(picked ? `/api/quotes?symbols=${encodeURIComponent(toYahoo(picked.id))}` : null, 60_000);
-  const pq = pickedQuote.data?.quotes?.[0];
-  const optKind: OptKind = `${sold ? "sell" : "buy"}-${optSide}`;
-  // what the trade looks like at expiry, priced off the chosen real contract
-  const prem = option && !past && useReal && legSel ? midPrice(legSel.bid, legSel.ask, legSel.last) : null;
-  const amt = Number(amount);
-  const summary =
-    prem !== null && prem > 0 && rowSel && amt > 0
-      ? (() => {
-          const shares = amt / prem;
-          const k = rowSel.strike;
-          const breakeven = optSide === "call" ? k + prem : k - prem;
-          const putMax = (k - prem) * shares;
-          return {
-            contracts: shares / 100,
-            breakeven,
-            maxLoss: isSold ? (optSide === "call" ? null : putMax) : amt,
-            maxProfit: isSold ? amt : optSide === "call" ? null : putMax,
-          };
-        })()
-      : null;
-  const money = (v: number | null) => (v === null ? "no limit" : `$${fmtNum(v, 0)}`);
-
   // Analytics: daily bars from before the start date only (no hindsight)
   const insStart = past ? parseDay(start) : now ? todayStartMs(now) : NaN;
   const insSym = picked ? toYahoo(picked.id) : null;
@@ -363,7 +357,42 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
     return () => ctrl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- insKey already encodes insSym and insStart
   }, [insKey]);
-  const earnApi = useApi<{ details?: { events?: { earningsDate: number | null; earningsEstimate: boolean | null } } }>(option && picked ? `/api/stock/${encodeURIComponent(picked.id)}` : null);
+  const fmtPrem = (v: number | null) => (v === null ? "n/a" : fmtNum(v, v < 1 ? 3 : 2));
+  const pickedQuote = useApi<{ quotes: QuoteDTO[] }>(picked ? `/api/quotes?symbols=${encodeURIComponent(toYahoo(picked.id))}` : null, 60_000);
+  const pq = pickedQuote.data?.quotes?.[0];
+  const optKind: OptKind = `${sold ? "sell" : "buy"}-${optSide}`;
+  // dates Yahoo does not list: Black-Scholes at the stock's recent volatility, strikes taken from the nearest listed chain
+  const hvNow = insRes?.key === insKey ? histVol(insRes.bars, insStart) : null;
+  const estSigma = hvNow ?? DEFAULT_SIGMA;
+  const spotNow = pq?.price ?? chain?.spot ?? null;
+  const tSel = now && expirySel !== null ? Math.max((expiryCloseMs(expirySel) - now) / YEAR_MS, MIN_T) : null;
+  const estStrikes = estMode && chain ? [...new Set(chain.strikes.map((r) => r.strike))].sort((x, y) => x - y) : [];
+  const kEst = estStrikes.length === 0 ? null : (estStrikes.find((k) => String(k) === realStrike) ?? estStrikes.reduce((best, k) => (Math.abs(k - (spotNow ?? 0)) < Math.abs(best - (spotNow ?? 0)) ? k : best)));
+  const estPrem = (k: number) => (spotNow !== null && tSel !== null ? bsOption(optSide === "call", spotNow, k, tSel, RISK_FREE, estSigma) : null);
+  // what the trade looks like at expiry, priced off the chosen contract (real mid, or estimate)
+  const kSel = option && !past ? (useReal ? (rowSel?.strike ?? null) : kEst) : null;
+  const prem = option && !past && useReal && legSel ? midPrice(legSel.bid, legSel.ask, legSel.last) : option && !past && estMode && kEst !== null ? estPrem(kEst) : null;
+  // implied volatility backed out of the mid price (Yahoo's own impliedVolatility is unreliable close to expiry)
+  const solvedIv = useReal && prem !== null && spotNow !== null && tSel !== null && kSel !== null ? impliedVol(optSide === "call", prem, spotNow, kSel, tSel, RISK_FREE) : null;
+  const legIv = solvedIv ?? (legSel?.iv && legSel.iv > MIN_SIGMA ? legSel.iv : null);
+  const amt = Number(amount);
+  const summary =
+    prem !== null && prem > 0 && kSel !== null && amt > 0
+      ? (() => {
+          const shares = amt / prem;
+          const k = kSel;
+          const breakeven = optSide === "call" ? k + prem : k - prem;
+          const putMax = (k - prem) * shares;
+          return {
+            contracts: shares / 100,
+            breakeven,
+            maxLoss: isSold ? (optSide === "call" ? null : putMax) : amt,
+            maxProfit: isSold ? amt : optSide === "call" ? null : putMax,
+          };
+        })()
+      : null;
+  const money = (v: number | null) => (v === null ? "no limit" : `$${fmtNum(v, 0)}`);
+  const earnApi = useApi<{ details?: { events?: { earningsDate: number | null; earningsEstimate: boolean | null }; dividends?: { exDate: number | null } } }>(option && picked ? `/api/stock/${encodeURIComponent(picked.id)}` : null);
   const analytics = (() => {
     if (!insKey || insRes?.key !== insKey) return null;
     const hist = insRes.bars.filter((b) => b.t < insStart && b.close > 0).sort((a, b) => a.t - b.t);
@@ -372,15 +401,17 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
     if (closes.length < 30 || spot === null || !(spot > 0)) return null;
     const startRef = past ? insStart : (now ?? insStart);
     const expMs = option ? (useReal && !past && expirySel !== null ? expirySel : parseDay(expiry)) : NaN;
-    const hasExp = option && Number.isFinite(expMs) && expMs > startRef;
-    const calDays = hasExp ? (expMs - startRef) / DAY_MS : 0;
+    // expiry is the exchange close (4pm New York) on the expiry day, not midnight
+    const expClose = option && Number.isFinite(expMs) ? expiryCloseMs(expMs) : NaN;
+    const hasExp = option && Number.isFinite(expClose) && expClose > startRef;
+    const calDays = hasExp ? (expClose - startRef) / DAY_MS : 0;
     const horizon = hasExp ? tradingDaysBetween(startRef, expMs) : SHARE_HORIZON;
     const stats = moveStats(closes, horizon);
     const hv = histVol(hist, insStart);
-    const iv = !past && useReal && legSel?.iv && legSel.iv > 0 ? legSel.iv : null;
+    const iv = !past && useReal ? legIv : null;
     const sigma = iv !== null ? Math.min(Math.max(iv, MIN_SIGMA), MAX_SIGMA) : (hv ?? DEFAULT_SIGMA);
-    const k = option ? (!past && useReal && rowSel ? rowSel.strike : (spot * Number(strike)) / 100) : 0;
-    const t = calDays / 365;
+    const k = option ? (!past && kSel !== null ? kSel : (spot * Number(strike)) / 100) : 0;
+    const t = Math.max(calDays / 365, MIN_T);
     const premium = prem !== null && prem > 0 ? prem : option && hasExp && k > 0 ? bsOption(optSide === "call", spot, k, t, RISK_FREE, sigma) : null;
     const be = option && premium !== null && k > 0 ? (optSide === "call" ? k + premium : k - premium) : null;
     const g = option && hasExp && k > 0 ? greeks(optSide === "call", spot, k, t, RISK_FREE, sigma) : null;
@@ -404,6 +435,7 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
     if (!now) return;
     if (!picked) return setError("Choose a stock.");
     if (option && !past && chainLoading) return setError("Loading option prices. Try again in a moment.");
+    if (!reason.trim()) return setError("Say why you are taking this trade.");
     const amt = Number(amount);
     if (!(amt > 0) || amt > MAX_AMOUNT) return setError("Enter an amount above zero.");
     const todayMs = todayStartMs(now);
@@ -421,7 +453,11 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
     if (option && !past && useReal && expirySel !== null && rowSel && legSel) {
       const premium = midPrice(legSel.bid, legSel.ask, legSel.last);
       if (premium === null) return setError("That contract has no price right now. Pick another strike.");
-      realLeg = { contractSymbol: legSel.contractSymbol, premium, strike: rowSel.strike, iv: legSel.iv };
+      realLeg = { contractSymbol: legSel.contractSymbol, premium, strike: rowSel.strike, iv: legIv };
+      expiryMs = expirySel;
+    } else if (option && !past && estMode && expirySel !== null && kEst !== null && spotNow !== null) {
+      strikePct = Math.round((kEst / spotNow) * 10000) / 100;
+      if (!(strikePct >= 50 && strikePct <= 150)) return setError("Strike must be between 50% and 150% of the entry price.");
       expiryMs = expirySel;
     } else if (option) {
       strikePct = Number(strike);
@@ -467,6 +503,7 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
       }
       const ok = add({
         side,
+        reason: reason.trim(),
         symbol: picked.id,
         amount: amt,
         startMs,
@@ -486,6 +523,7 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
       setExpiry("");
       setTarget("");
       setStop("");
+      setReason("");
     } catch {
       setError("Could not reach the server. Try again.");
     } finally {
@@ -566,20 +604,23 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
                 ? "Looking for Yahoo option prices…"
                 : useReal
                   ? "Enters at the current price, using the Yahoo option mid price."
-                  : "No Yahoo option prices for this stock: using a Black-Scholes estimate."
+                  : estMode
+                    ? "Enters at the current price. This date has no Yahoo quotes: premium is a Black-Scholes estimate."
+                    : "No Yahoo option prices for this stock: using a Black-Scholes estimate."
               : "Enters at the current price."}
         </p>
       </fieldset>
-      {option && !past && useReal && chain ? (
+      {option && !past && chain && days.length > 0 && expirySel !== null ? (
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label htmlFor="trade-rexpiry" className={label}>
-              Expiry <span className="font-normal">(Yahoo)</span>
+              Expiry
             </label>
-            <select id="trade-rexpiry" value={listed.find((e) => e.day === expirySel)?.ms ?? ""} onChange={(e) => setRealExpiry(Number(e.target.value))} className={input}>
-              {listed.map((e) => (
-                <option key={e.ms} value={e.ms}>
-                  {fmtDay(e.day)}
+            <select id="trade-rexpiry" value={expirySel} onChange={(e) => setRealExpiry(Number(e.target.value))} className={input}>
+              {days.map((d) => (
+                <option key={d} value={d}>
+                  {fmtDay(d)}
+                  {listedDays.has(d) ? " · Yahoo" : ""}
                 </option>
               ))}
             </select>
@@ -588,15 +629,21 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
             <label htmlFor="trade-rstrike" className={label}>
               Strike <span className="font-normal">(premium)</span>
             </label>
-            <select id="trade-rstrike" value={rowSel ? String(rowSel.strike) : ""} onChange={(e) => setRealStrike(e.target.value)} className={input}>
-              {strikeRows.map((r) => {
-                const l = legOf(r)!;
-                return (
-                  <option key={r.strike} value={String(r.strike)}>
-                    {fmtNum(r.strike, r.strike < 1 ? 3 : 2)} — {fmtPrem(midPrice(l.bid, l.ask, l.last))}
-                  </option>
-                );
-              })}
+            <select id="trade-rstrike" value={kSel !== null ? String(kSel) : ""} onChange={(e) => setRealStrike(e.target.value)} className={input}>
+              {useReal
+                ? strikeRows.map((r) => {
+                    const l = legOf(r)!;
+                    return (
+                      <option key={r.strike} value={String(r.strike)}>
+                        {fmtNum(r.strike, r.strike < 1 ? 3 : 2)} — {fmtPrem(midPrice(l.bid, l.ask, l.last))}
+                      </option>
+                    );
+                  })
+                : estStrikes.map((k) => (
+                    <option key={k} value={String(k)}>
+                      {fmtNum(k, k < 1 ? 3 : 2)} — {fmtPrem(estPrem(k))} est.
+                    </option>
+                  ))}
             </select>
           </div>
         </div>
@@ -635,6 +682,24 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
             `Breakeven = strike ${optSide === "call" ? "+" : "−"} premium. 1 contract = 100 shares. Contracts and breakeven show here when real Yahoo option prices are available (Today start).`
           )}
         </p>
+      )}
+      {option && !past && now && analytics && analytics.premium !== null && kSel !== null && expirySel !== null && amt > 0 && (
+        <TradeRisk
+          spot={analytics.spot}
+          call={optSide === "call"}
+          sold={sold}
+          strike={kSel}
+          premium={analytics.premium}
+          amount={amt}
+          sigma={Math.min(Math.max(analytics.iv ?? analytics.hv ?? DEFAULT_SIGMA, MIN_SIGMA), MAX_SIGMA)}
+          expiryMs={expiryCloseMs(expirySel)}
+          now={now}
+          leg={useReal ? legSel : null}
+          rows={useReal ? (chain?.strikes ?? null) : null}
+          marketState={pq?.marketState ?? null}
+          earningsMs={earnApi.data?.details?.events?.earningsDate ?? null}
+          exDivMs={earnApi.data?.details?.dividends?.exDate ?? null}
+        />
       )}
       {analytics && (
         <div className="rounded-md bg-panel2 px-2 py-1.5 text-xs leading-snug">
@@ -738,14 +803,20 @@ function NewTradeForm({ add, disabled, note }: { add: (t: Omit<Trade, "id" | "cr
           <label htmlFor="trade-target" className={label}>
             {isSold ? "Take profit % (value fell)" : option ? "Take profit % (value)" : "Take profit %"} <span className="font-normal">(opt.)</span>
           </label>
-          <input id="trade-target" type="number" inputMode="decimal" min="0" step="any" placeholder="e.g. 10" value={target} onChange={(e) => setTarget(e.target.value)} className={input} />
+          <input id="trade-target" type="number" inputMode="decimal" min="0" step="any" placeholder={isSold ? "e.g. 50" : option ? "e.g. 100" : "e.g. 10"} value={target} onChange={(e) => setTarget(e.target.value)} className={input} />
         </div>
         <div>
           <label htmlFor="trade-stop" className={label}>
             {isSold ? "Stop loss % (value rose)" : option ? "Stop loss % (value)" : "Stop loss %"} <span className="font-normal">(opt.)</span>
           </label>
-          <input id="trade-stop" type="number" inputMode="decimal" min="0" step="any" placeholder="e.g. 5" value={stop} onChange={(e) => setStop(e.target.value)} className={input} />
+          <input id="trade-stop" type="number" inputMode="decimal" min="0" step="any" placeholder={isSold ? "e.g. 100" : option ? "e.g. 50" : "e.g. 5"} value={stop} onChange={(e) => setStop(e.target.value)} className={input} />
         </div>
+      </div>
+      <div>
+        <label htmlFor="trade-reason" className={label}>
+          Why am I taking this trade?
+        </label>
+        <textarea id="trade-reason" rows={2} maxLength={MAX_REASON_LEN} required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Earnings beat, breaking resistance" className={`${input} h-auto resize-none py-1`} />
       </div>
       {(error || note) && (
         <p role={error ? "alert" : undefined} className={`text-xs ${error ? "text-loss" : "text-muted"}`}>
@@ -785,7 +856,7 @@ const td = "px-2 py-1.5 align-middle whitespace-nowrap tabular-nums";
 
 export function TradesView() {
   const acct = useAccount();
-  const { trades, ready, error, full, add, remove, close } = useTrades();
+  const { trades, ready, error, full, add, remove, close, setReview } = useTrades();
   const now = useNow();
   const [tab, setTab] = useState<Tab>("open");
   const hist = useHistories(trades);
@@ -838,7 +909,7 @@ export function TradesView() {
           {stats.winRate === null ? "—" : `${fmtNum(stats.winRate, 0)}%`}
         </Stat>
       </div>
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[22rem_minmax(0,1fr)] xl:grid-cols-[28rem_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[22rem_minmax(0,1fr)] xl:grid-cols-[28rem_minmax(0,1fr)]">
         <Panel title="New test trade" bodyClass="flex flex-col gap-3 overflow-auto p-3">
           <NewTradeForm
             add={add}
@@ -890,7 +961,7 @@ export function TradesView() {
                   return (
                     <tr key={t.id} className="border-b border-line/60 last:border-0">
                       <td className={`${td} font-sans`}>
-                        <Link href={`/stock/${t.symbol}`} className="font-semibold text-accent hover:underline">
+                        <Link href={`/stock/${encodeURIComponent(t.symbol)}`} className="font-semibold text-accent hover:underline">
                           {q?.code ?? t.symbol}
                         </Link>
                         <div className="flex max-w-[22ch] items-center gap-1 text-xs text-muted">
@@ -969,6 +1040,11 @@ export function TradesView() {
           )}
         </Panel>
       </div>
+      {now && (
+        <div className="shrink-0">
+          <TradeJournal rows={rows.map((r) => ({ trade: r.t, result: r.result, price: r.q?.price ?? null, code: r.q?.code ?? r.t.symbol }))} now={now} onReview={setReview} />
+        </div>
+      )}
       <p className="shrink-0 rounded-md border border-line bg-panel px-3 py-1.5 text-xs leading-snug text-muted">
         Simulated: no real money. Ignores fees, dividends, tax and currency conversion. Option prices are Yahoo quotes (delayed) when a chain exists, otherwise Black-Scholes estimates.
         Selling options can lose more than the premium; sold calls have unlimited risk. Shorts ignore borrow fees and margin.

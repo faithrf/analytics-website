@@ -126,7 +126,7 @@ function TickerCell({ row }: { row: LeaderRow }) {
   return (
     <div className="min-w-0">
       {t && isValidId(id) ? (
-        <Link href={`/stock/${id}`} className="font-semibold text-accent hover:underline">
+        <Link href={`/stock/${encodeURIComponent(id)}`} className="font-semibold text-accent hover:underline">
           {t}
         </Link>
       ) : (

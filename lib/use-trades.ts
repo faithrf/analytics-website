@@ -1,6 +1,6 @@
 "use client";
 import { useSyncExternalStore } from "react";
-import { MAX_TRADES, parseTrades, TRADES_KEY, type Trade } from "@/lib/trades";
+import { MAX_TRADES, parseTrades, TRADES_KEY, type Trade, type TradeReview } from "@/lib/trades";
 import { whenAccountLoaded } from "@/lib/use-account";
 
 /**
@@ -100,6 +100,10 @@ export function useTrades() {
     },
     remove: (id: string) => {
       if (!locked) save(s.trades.filter((t) => t.id !== id));
+    },
+    /** Stores the after-the-fact review on a trade. */
+    setReview: (id: string, review: TradeReview) => {
+      if (!locked) save(s.trades.map((t) => (t.id === id ? { ...t, review } : t)));
     },
     /** Closes an open trade at the given price now (`optValue`: the contract's value, for real-priced options). */
     close: (id: string, price: number, optValue?: number) => {

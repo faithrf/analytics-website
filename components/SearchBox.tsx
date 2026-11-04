@@ -50,7 +50,7 @@ export function SearchBox() {
   const go = (code: string) => {
     setOpen(false);
     setQ("");
-    router.push(`/stock/${code}`);
+    router.push(`/stock/${encodeURIComponent(code)}`);
   };
 
   // Enter before suggestions arrive: search now and open the best match, so a
@@ -102,7 +102,7 @@ export function SearchBox() {
         aria-controls={listId}
         aria-autocomplete="list"
         aria-label="Search stocks"
-        placeholder="Search by company name or code, e.g. Commonwealth Bank, Apple, 7203"
+        placeholder="Search company, code, commodity or index, e.g. Apple, 7203, oil, gold"
         className="h-8 w-full rounded-md border border-line bg-bg px-3 text-sm outline-none placeholder:text-muted focus:border-accent"
       />
       {showList && (
@@ -128,10 +128,10 @@ export function SearchBox() {
               }}
               className={`flex cursor-pointer items-center gap-3 px-3 py-1.5 text-sm ${i === active ? "bg-panel2" : ""}`}
             >
-              <span className="w-16 truncate font-semibold text-accent">{h.code}</span>
+              <span className="w-20 truncate font-semibold text-accent">{h.code}</span>
               <span className="min-w-0 flex-1 truncate">{h.name}</span>
               <span className="w-20 text-right text-xs text-muted">
-                {h.market} {h.type === "ETF" ? "ETF" : "stock"}
+                {h.type === "FUTURE" || h.type === "INDEX" ? h.market : `${h.market} ${h.type === "ETF" ? "ETF" : "stock"}`}
               </span>
             </li>
           ))}

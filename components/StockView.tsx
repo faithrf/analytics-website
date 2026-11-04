@@ -24,7 +24,7 @@ import {
 import { PriceChart } from "@/components/PriceChart";
 import { PinMenu } from "@/components/PinMenu";
 import { region } from "@/lib/markets";
-import { displayCode, marketOf, regionOf, toYahoo } from "@/lib/symbols";
+import { displayCode, isNonEquityId, marketOf, regionOf, toYahoo } from "@/lib/symbols";
 
 interface StockData {
   quote: QuoteDTO;
@@ -39,17 +39,16 @@ const SIDE_TABS = [
   { id: "financials", label: "Financials" },
   { id: "analysts", label: "Analysts" },
   { id: "profile", label: "Profile" },
-  { id: "news", label: "News" },
 ] as const;
 type SideTab = (typeof SIDE_TABS)[number]["id"];
 
 export function StockView({ code }: { code: string }) {
   const refresh = useRefreshMs(regionOf(code));
-  const stock = useApi<StockData>(`/api/stock/${code}`, refresh);
+  const stock = useApi<StockData>(`/api/stock/${encodeURIComponent(code)}`, refresh);
   const [range, setRange] = useState<Range>("6M");
   const [side, setSide] = useState<SideTab>("stats");
   const chart = useApi<ChartDTO>(
-    `/api/chart?symbol=${toYahoo(code)}&range=${range}`,
+    `/api/chart?symbol=${encodeURIComponent(toYahoo(code))}&range=${range}`,
     range === "1D" ? refresh : 0,
   );
 
@@ -62,7 +61,7 @@ export function StockView({ code }: { code: string }) {
             notFound
               ? {
                   code: "not_found",
-                  message: `We couldn't find a ${marketOf(code)} stock with the code "${displayCode(code)}". Check the spelling or use the search box.`,
+                  message: `We couldn't find a ${isNonEquityId(code) ? marketOf(code).toLowerCase() : `${marketOf(code)} stock`} with the code "${displayCode(code)}". Check the spelling or use the search box.`,
                 }
               : stock.error
           }
@@ -96,7 +95,7 @@ export function StockView({ code }: { code: string }) {
                 </span>
               )}
             </div>
-            <div className="flex items-baseline gap-4">
+            <div className="flex max-w-full min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
               <span className="text-3xl leading-none font-semibold tracking-tight">
                 {fmtNum(q.price, digits)}
               </span>
@@ -128,7 +127,7 @@ export function StockView({ code }: { code: string }) {
         )}
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_380px_340px]">
         <Panel
           title="Price and volume"
           right={
@@ -159,7 +158,10 @@ export function StockView({ code }: { code: string }) {
           ) : !chart.data || chart.data.range !== range ? (
             <Skeleton className="h-full w-full" />
           ) : (
-            <PriceChart chart={chart.data} range={range} />
+            // below lg the panel has no fixed height, so 100% in the chart would resolve to 0
+            <div className="h-[304px] lg:h-full">
+              <PriceChart chart={chart.data} range={range} />
+            </div>
           )}
         </Panel>
 
@@ -169,13 +171,15 @@ export function StockView({ code }: { code: string }) {
           className="min-h-[300px]"
           bodyClass="overflow-auto"
         >
-          <div className="flex items-center justify-between border-b border-line px-3 py-1.5">
-            <Tabs
-              tabs={SIDE_TABS}
-              value={side}
-              onChange={setSide}
-              label="Stock details"
-            />
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-line px-3 py-1.5">
+            <div className="max-w-full shrink-0">
+              <Tabs
+                tabs={isNonEquityId(code) ? SIDE_TABS.slice(0, 1) : SIDE_TABS}
+                value={side}
+                onChange={setSide}
+                label="Stock details"
+              />
+            </div>
             {side === "stats" && q && (
               <Freshness
                 dataTime={q.time}
@@ -186,12 +190,10 @@ export function StockView({ code }: { code: string }) {
               />
             )}
           </div>
-          {side === "news" ? (
-            <News code={code} />
-          ) : !stock.data ? (
+          {!stock.data ? (
             <StatsSkeleton />
           ) : side === "stats" ? (
-            <Stats data={stock.data} />
+            isNonEquityId(code) ? <SimpleStats data={stock.data} /> : <Stats data={stock.data} />
           ) : side === "financials" ? (
             <Financials details={stock.data.details} />
           ) : side === "analysts" ? (
@@ -200,6 +202,8 @@ export function StockView({ code }: { code: string }) {
             <Profile data={stock.data} />
           )}
         </Panel>
+
+        <News code={code} />
       </div>
     </div>
   );
@@ -290,6 +294,23 @@ const num2 = (n: number | null, digits = 2) =>
 const pctOf = (n: number | null) =>
   isNum(n) ? `${fmtNum(n * 100, 1)}%` : null;
 const compact = (n: number | null) => (isNum(n) ? fmtCompact(n) : null);
+
+function SimpleStats({ data }: { data: StockData }) {
+  const q = data.quote;
+  const dp = priceDigits(q.price);
+  return (
+    <dl>
+      <Row label="Previous close">{fmtNum(q.prevClose, priceDigits(q.prevClose))}</Row>
+      <Row label="Day range">
+        {isNum(q.dayLow) && isNum(q.dayHigh) ? `${fmtNum(q.dayLow, dp)} – ${fmtNum(q.dayHigh, dp)}` : "—"}
+      </Row>
+      <Row label="52-week range">
+        {isNum(q.low52) && isNum(q.high52) ? <RangeBar low={q.low52} high={q.high52} value={q.price} /> : "—"}
+      </Row>
+      <OptRow label="Volume">{compact(q.volume)}</OptRow>
+    </dl>
+  );
+}
 
 function Stats({ data }: { data: StockData }) {
   const { quote: q, details: d } = data;
@@ -656,64 +677,65 @@ const newsDate = new Intl.DateTimeFormat("en-AU", {
   hourCycle: "h23",
 });
 
+/** Headlines for this stock, in its own column beside the stats (full width below on smaller screens). */
 function News({ code }: { code: string }) {
   const { data, error, loading, reload, updatedAt } = useApi<{
     news: NewsItem[];
-  }>(`/api/news?code=${code}`);
-  if (error && !data) {
-    return (
-      <div className="p-3">
-        <ErrorBox error={error} onRetry={reload} compact />
-      </div>
-    );
-  }
-  if (loading || !data) {
-    return (
-      <div className="space-y-3 p-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-10 w-full" />
-        ))}
-      </div>
-    );
-  }
-  if (data.news.length === 0)
-    return (
-      <p className="p-3 text-sm text-muted">
-        No recent headlines for {displayCode(code)}.
-      </p>
-    );
+  }>(`/api/news?code=${encodeURIComponent(code)}`);
   return (
-    <>
-      <div className="flex justify-end border-b border-line px-3 py-1">
-        <Freshness
-          kind="news"
-          dataTime={newest(data.news.map((n) => n.time))}
-          updatedAt={updatedAt}
-          refreshMs={0}
-          onRefresh={reload}
-        />
-      </div>
-      <ul>
-        {data.news.map((n) => (
-          <li
-            key={n.link}
-            className="border-b border-line/60 px-3 py-2 last:border-0"
-          >
-            <a
-              href={n.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm leading-snug font-medium hover:text-accent hover:underline"
+    <Panel
+      title="Related news"
+      right={
+        data && data.news.length > 0 ? (
+          <Freshness
+            kind="news"
+            dataTime={newest(data.news.map((n) => n.time))}
+            updatedAt={updatedAt}
+            refreshMs={0}
+            onRefresh={reload}
+          />
+        ) : undefined
+      }
+      className="min-h-[300px] lg:col-span-2 xl:col-span-1"
+      bodyClass="overflow-auto"
+    >
+      {error && !data ? (
+        <div className="p-3">
+          <ErrorBox error={error} onRetry={reload} compact />
+        </div>
+      ) : loading || !data ? (
+        <div className="space-y-3 p-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      ) : data.news.length === 0 ? (
+        <p className="p-3 text-sm text-muted">
+          No recent headlines for {displayCode(code)}.
+        </p>
+      ) : (
+        <ul>
+          {data.news.map((n) => (
+            <li
+              key={n.link}
+              className="border-b border-line/60 px-3 py-2 last:border-0"
             >
-              {n.title}
-            </a>
-            <div className="mt-0.5 text-xs text-muted">
-              {n.publisher}
-              {n.time ? `, ${newsDate.format(new Date(n.time))}` : ""}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </>
+              <a
+                href={n.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm leading-snug font-medium hover:text-accent hover:underline"
+              >
+                {n.title}
+              </a>
+              <div className="mt-0.5 text-xs text-muted">
+                {n.publisher}
+                {n.time ? `, ${newsDate.format(new Date(n.time))}` : ""}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }

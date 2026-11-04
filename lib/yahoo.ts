@@ -5,6 +5,7 @@ import { keepLastSessions, rangeParams, rangeTtlMs, type Range } from "@/lib/ran
 import { calcChange } from "@/lib/aggregate";
 import { getStockFeedItems, mergeNews } from "@/lib/feeds";
 import { displayCode, fromYahoo, isValidId, marketOf } from "@/lib/symbols";
+import { GLOBAL_GAUGES } from "@/lib/markets";
 import { mapChain, midPrice, type ContractQuote, type OptionChain } from "@/lib/options";
 
 /* ---------- config ---------- */
@@ -529,7 +530,36 @@ export async function getTermNews(term: string): Promise<MarketNewsItem[]> {
 /** Yahoo exchange codes for the US listings we accept (others, e.g. OTC, are dropped). */
 const US_EXCHANGES = new Set(["NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS", "NAS"]);
 
-/** Equities and ETFs on the markets in lib/markets.ts. */
+const GAUGE_LABEL = new Map(GLOBAL_GAUGES.map((g) => [g.symbol, g.label]));
+
+/** Commodities and indices Yahoo search often misses; matched by keyword. */
+const ALIASES: { symbol: string; name: string; words: string[] }[] = [
+  { symbol: "CL=F", name: GAUGE_LABEL.get("CL=F") ?? "Crude oil", words: ["crude", "oil", "wti"] },
+  { symbol: "BZ=F", name: "Brent crude oil", words: ["brent", "crude", "oil"] },
+  { symbol: "GC=F", name: GAUGE_LABEL.get("GC=F") ?? "Gold", words: ["gold"] },
+  { symbol: "SI=F", name: "Silver", words: ["silver"] },
+  { symbol: "NG=F", name: "Natural gas", words: ["natural gas", "gas"] },
+  { symbol: "HG=F", name: "Copper", words: ["copper"] },
+  { symbol: "^GSPC", name: "S&P 500", words: ["s&p", "sp500", "spx", "gspc"] },
+  { symbol: "^DJI", name: "Dow Jones Industrial Average", words: ["dow", "djia"] },
+  { symbol: "^IXIC", name: "Nasdaq Composite", words: ["nasdaq", "ixic"] },
+  { symbol: "^AXJO", name: "S&P/ASX 200", words: ["asx 200", "asx200", "axjo"] },
+];
+
+function aliasHits(q: string): SearchHit[] {
+  if (q.length < 2) return [];
+  return ALIASES.filter((a) => a.words.some((w) => w.startsWith(q) || q.startsWith(w)))
+    .map((a) => ({
+      id: a.symbol,
+      symbol: a.symbol,
+      code: displayCode(a.symbol),
+      market: marketOf(a.symbol),
+      name: a.name,
+      type: a.symbol.startsWith("^") ? "INDEX" : "FUTURE",
+    }));
+}
+
+/** Equities and ETFs on the markets in lib/markets.ts, plus futures and indices. */
 export async function searchStocks(query: string): Promise<SearchHit[]> {
   const q = query.trim().toLowerCase();
   return shared.search.getOrLoad(
@@ -541,8 +571,10 @@ export async function searchStocks(query: string): Promise<SearchHit[]> {
       for (const r of res.quotes ?? []) {
         const symbol = str(r.symbol);
         const type = str(r.quoteType) ?? "";
-        if (!symbol || (type !== "EQUITY" && type !== "ETF")) continue;
-        if (!symbol.includes(".") && !US_EXCHANGES.has(str(r.exchange) ?? "")) continue;
+        if (!symbol || (type !== "EQUITY" && type !== "ETF" && type !== "FUTURE" && type !== "INDEX")) continue;
+        const nonEquity = type === "FUTURE" || type === "INDEX";
+        if (nonEquity && !/^(\^[A-Z0-9]{1,8}|[A-Z0-9]{1,6}=F)$/.test(symbol)) continue;
+        if (!nonEquity && !symbol.includes(".") && !US_EXCHANGES.has(str(r.exchange) ?? "")) continue;
         const id = fromYahoo(symbol);
         if (!isValidId(id)) continue;
         hits.push({
@@ -554,7 +586,10 @@ export async function searchStocks(query: string): Promise<SearchHit[]> {
           type,
         });
       }
-      return hits.slice(0, 10);
+      const seen = new Set<string>();
+      return [...aliasHits(q), ...hits]
+        .filter((h) => !seen.has(h.id) && !!seen.add(h.id))
+        .slice(0, 10);
     },
     { staleOnError: true, swrMs: HISTORY_SWR },
   );

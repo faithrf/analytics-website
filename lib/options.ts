@@ -16,6 +16,10 @@ export interface OptionLeg {
   last: number | null;
   /** implied volatility, annualised fraction (0.3 = 30%) */
   iv: number | null;
+  volume?: number | null;
+  openInterest?: number | null;
+  /** time of the last trade, ms */
+  lastTradeMs?: number | null;
 }
 export interface OptionRow {
   strike: number;
@@ -57,7 +61,7 @@ function mapLeg(r: unknown): OptionLeg | null {
   const o = rec(r);
   const contractSymbol = typeof o.contractSymbol === "string" ? o.contractSymbol : "";
   if (!CONTRACT_RE.test(contractSymbol)) return null;
-  return { contractSymbol, bid: num(o.bid), ask: num(o.ask), last: num(o.lastPrice), iv: num(o.impliedVolatility) };
+  return { contractSymbol, bid: num(o.bid), ask: num(o.ask), last: num(o.lastPrice), iv: num(o.impliedVolatility), volume: num(o.volume), openInterest: num(o.openInterest), lastTradeMs: toMs(o.lastTradeDate) };
 }
 
 /** Keeps the `max` strikes closest to spot (centred on it), in ascending order. */

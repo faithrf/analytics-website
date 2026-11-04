@@ -31,8 +31,15 @@ describe("stock ids", () => {
       expect(fromYahoo(toYahoo(id))).toBe(id);
     }
   });
+  it("accepts futures and indices", () => {
+    for (const id of ["CL=F", "GC=F", "^GSPC", "^AXJO"]) {
+      expect(isValidId(id)).toBe(true);
+      expect(toYahoo(id)).toBe(id);
+      expect(fromYahoo(id)).toBe(id);
+    }
+  });
   it("rejects junk", () => {
-    for (const id of ["", "bhp", "TOOLONGCODE", "AAPL.XX", "../etc", "A B", "^AXJO", "X.US.US"]) {
+    for (const id of ["", "bhp", "TOOLONGCODE", "AAPL.XX", "../etc", "A B", "X.US.US", "^", "=F", "TOOLONGCODE=F"]) {
       expect(isValidId(id)).toBe(false);
     }
   });

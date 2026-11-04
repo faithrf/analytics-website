@@ -401,7 +401,7 @@ function BoardGrid({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
                     <Link
-                      href={`/stock/${id}`}
+                      href={`/stock/${encodeURIComponent(id)}`}
                       className="font-semibold text-accent hover:underline"
                     >
                       {displayCode(id)}

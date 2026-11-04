@@ -1,5 +1,12 @@
 import type { NextConfig } from "next";
-import pkg from "./package.json" with { type: "json" };
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+// Read with fs, not a JSON import: Next re-loads this config in worker processes
+// (used for dynamic routes like /stock/[code]) where import attributes crash.
+const pkg = JSON.parse(
+  readFileSync(join(process.cwd(), "package.json"), "utf8"),
+) as { version: string };
 
 /** "1.1.0" -> "1.01": the minor number is the small bump, shown as two digits. */
 function appVersion(v: string) {

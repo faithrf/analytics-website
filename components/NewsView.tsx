@@ -81,7 +81,7 @@ function TickerChip({ symbol, quote }: { symbol: string; quote?: QuoteDTO }) {
     "inline-flex items-center gap-1 rounded border border-line px-1.5 py-0.5 text-xs";
   return isValidId(id) ? (
     <Link
-      href={`/stock/${id}`}
+      href={`/stock/${encodeURIComponent(id)}`}
       className={`${cls} hover:border-accent`}
       title={quote?.name}
     >
@@ -119,7 +119,7 @@ export function NewsView() {
         />
       </div>
       <GlobalStrip {...global} />
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-12">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-12">
         <Panel
           className="min-h-[320px] lg:col-span-8"
           title={
@@ -340,7 +340,7 @@ function Mentions({ data, loading, error }: NewsState) {
             >
               {isValidId(id) ? (
                 <Link
-                  href={`/stock/${id}`}
+                  href={`/stock/${encodeURIComponent(id)}`}
                   className="w-20 truncate font-semibold text-accent hover:underline"
                 >
                   {label}

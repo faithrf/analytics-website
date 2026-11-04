@@ -6,7 +6,7 @@ import { getDetails, getQuote } from "@/lib/yahoo";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/stock/BHP or /api/stock/AAPL.US - quote, full details and sector. 404 for unknown tickers. */
+/** GET /api/stock/BHP, /api/stock/AAPL.US, /api/stock/CL%3DF (futures) or /api/stock/%5EGSPC (index) - quote, full details and sector. 404 for unknown tickers. */
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ code: string }> }) {
   return respond(async () => {
     const id = decodeURIComponent((await ctx.params).code).toUpperCase();
