@@ -1,0 +1,20 @@
+{
+ "updatedAt": "2026-11-09T01:11:14.390Z",
+ "universe": 198,
+ "start": "2026-11-09",
+ "asOf": "2026-11-09",
+ "open": [],
+ "closed": [],
+ "pending": [],
+ "summary": {
+  "closed": 0,
+  "open": 0,
+  "hit": null,
+  "mean": null,
+  "baseline": null,
+  "edge": null,
+  "skipped": 0,
+  "pending": 0
+ },
+ "curve": []
+}

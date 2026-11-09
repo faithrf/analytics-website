@@ -98,6 +98,9 @@ export interface DailyBar {
   high: number;
   low: number;
   close: number;
+  /** open price and share volume; absent for some instruments (indices, futures) */
+  open?: number;
+  volume?: number;
 }
 export interface NewsItem {
   title: string;
@@ -367,7 +370,7 @@ export async function getDaily(symbol: string, from: number): Promise<DailyBar[]
   const day = 86_400_000;
   const start = Math.floor(from / day) * day - 2 * day;
   return shared.daily.getOrLoad(
-    `${symbol}|${start}`,
+    `v2|${symbol}|${start}`, // v2: bars carry open and volume
     HISTORY_TTL_S * 1000,
     async () => {
       const res = (await yf.chart(symbol, { period1: new Date(start), interval: "1d" }, OPTS)) as unknown as {
@@ -382,7 +385,16 @@ export async function getDaily(symbol: string, from: number): Promise<DailyBar[]
         const low = num(q.low);
         const close = num(q.close);
         if (t === null || high === null || low === null || close === null) continue;
-        bars.push({ t: Math.floor((t + offset * 1000) / day) * day, high, low, close });
+        const open = num(q.open);
+        const volume = num(q.volume);
+        bars.push({
+          t: Math.floor((t + offset * 1000) / day) * day,
+          high,
+          low,
+          close,
+          ...(open !== null && open > 0 ? { open } : {}),
+          ...(volume !== null && volume >= 0 ? { volume } : {}),
+        });
       }
       return bars;
     },

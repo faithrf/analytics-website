@@ -15,3 +15,7 @@ screenshots/tmp/
 AGENTS.md
 .vercel
 .env*
+
+# research data cache
+.cache/
+research-out/

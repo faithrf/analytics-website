@@ -11,6 +11,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "verify-tickers": "tsx scripts/verify-tickers.ts",
+    "model:train": "tsx scripts/model-train.ts",
+    "paper:update": "tsx scripts/paper-momentum.ts",
     "bump:small": "npm version minor --no-git-tag-version",
     "bump:big": "npm version major --no-git-tag-version"
   },

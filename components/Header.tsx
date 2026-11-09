@@ -97,6 +97,7 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/trades", label: "Trading simulator" },
   { href: "/backtest", label: "Backtest" },
+  { href: "/model", label: "Model" },
   { href: "/news", label: "News" },
   { href: "/leaders", label: "Leaders" },
 ] as const;
