@@ -1,5 +1,6 @@
 import tunedFile from "@/data/model-tuned.json";
 import { accuracy, type Accuracy } from "@/lib/stats";
+import { isCryptoId } from "@/lib/symbols";
 import {
   bsOption,
   DAY_MS,
@@ -194,7 +195,7 @@ export const BASE_HYPOTHESES: Hypothesis[] = [
   },
   {
     id: "earn-drift-up",
-    label: "Earnings drift: long after a positive reaction",
+    label: "Earnings drift: long after good reaction",
     rule: { kind: "earn-up", minPct: 5, volMult: 2, minGapDays: 21 },
     spec: {
       instrument: "long",
@@ -207,7 +208,7 @@ export const BASE_HYPOTHESES: Hypothesis[] = [
   },
   {
     id: "earn-drift-down",
-    label: "Earnings drift: short after a negative reaction",
+    label: "Earnings drift: short after bad reaction",
     rule: { kind: "earn-down", minPct: 5, volMult: 2, minGapDays: 21 },
     spec: {
       instrument: "short",
@@ -220,7 +221,7 @@ export const BASE_HYPOTHESES: Hypothesis[] = [
   },
   {
     id: "covered-call-spike",
-    label: "Sell premium: covered call after a big up day",
+    label: "Sell premium: covered call after big up day",
     rule: { kind: "day-up", minPct: 6, volMult: 1.5, minGapDays: 21 },
     spec: {
       instrument: "covered-call",
@@ -233,7 +234,7 @@ export const BASE_HYPOTHESES: Hypothesis[] = [
   },
   {
     id: "cash-put-drop",
-    label: "Sell premium: cash-secured put after a big down day",
+    label: "Sell premium: cash-secured put after big drop",
     rule: { kind: "day-down", minPct: 6, volMult: 1.5, minGapDays: 21 },
     spec: {
       instrument: "cash-put",
@@ -346,7 +347,12 @@ export interface Feat {
   earn: boolean;
 }
 
-export function computeFeatures(bars: MBar[], index?: MBar[]): Feat[] {
+export function computeFeatures(
+  bars: MBar[],
+  index?: MBar[],
+  /** crypto has no earnings: the earnings proxy is switched off so earn-kind rules never fire */
+  noEarnings = false,
+): Feat[] {
   const n = bars.length;
   const pos = new Map<number, number>();
   index?.forEach((b, j) => pos.set(b.t, j));
@@ -372,7 +378,7 @@ export function computeFeatures(bars: MBar[], index?: MBar[]): Feat[] {
     if (bars[i - 1].close > 0)
       sr[i] = (bars[i].close / bars[i - 1].close - 1) * 100;
   const out: Feat[] = [];
-  const earn = earningsFlags(bars);
+  const earn = noEarnings ? bars.map(() => false) : earningsFlags(bars);
   for (let i = 0; i < n; i++) {
     let abn: number | null = null;
     if (sr[i] !== null && ir[i] !== null) {
@@ -825,7 +831,7 @@ export function runModel(
   const baseRets: number[] = [];
   for (const [ticker, bars] of Object.entries(data)) {
     const index = run.indexFor?.(ticker);
-    const feats = computeFeatures(bars, index);
+    const feats = computeFeatures(bars, index, isCryptoId(ticker));
     const evs = detectEvents(bars, rule, -Infinity, { index, feats });
     const evIdx = new Set(evs.map((e) => e.i));
     for (const e of evs) {
@@ -904,7 +910,7 @@ export function liveSignals(
       rule,
       hasVolume(bars),
       needsFeatures(rule)
-        ? computeFeatures(bars, indexFor?.(ticker))
+        ? computeFeatures(bars, indexFor?.(ticker), isCryptoId(ticker))
         : undefined,
     );
     if (hit)

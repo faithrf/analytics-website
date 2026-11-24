@@ -12,6 +12,7 @@ import {
   type MBar,
   type TradeSpec,
 } from "@/lib/model";
+import { isCryptoId } from "@/lib/symbols";
 import { accuracy, rng, tStat, type Accuracy } from "@/lib/stats";
 import { DAY_MS } from "@/lib/trades";
 
@@ -249,7 +250,7 @@ export async function tuneFamily(
   const index: Record<string, MBar[] | undefined> = {};
   for (const k of tickers) {
     index[k] = indexFor(k);
-    feats[k] = computeFeatures(data[k], index[k]);
+    feats[k] = computeFeatures(data[k], index[k], isCryptoId(k));
   }
   const evCache = new Map<string, { k: string; i: number; t: number }[]>();
   const events = (rule: EventRule) => {

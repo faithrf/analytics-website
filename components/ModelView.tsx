@@ -46,7 +46,11 @@ import {
 import { type Accuracy } from "@/lib/stats";
 import paperData from "@/data/paper-momentum.json";
 import type { PaperLedger } from "@/lib/paper-momentum";
-import { Panel, Tabs } from "@/components/ui";
+import CeoSentimentPanel from "@/components/CeoSentimentPanel";
+import FundsPanel from "@/components/FundsPanel";
+import { Dropdown, Panel, Tabs } from "@/components/ui";
+import { SectorPanel } from "@/components/SectorPanel";
+import { indexSymbolFor, SECTORS } from "@/lib/sectors";
 import { fmtDay, input, label, Seg } from "@/components/TradesView";
 
 const MAX_HISTORY_MS = 3650 * DAY_MS - DAY_MS;
@@ -70,18 +74,19 @@ const CONFIRMS: { v: "" | "fade" | "follow"; l: string }[] = [
   { v: "fade", l: "Closed against" },
   { v: "follow", l: "Closed with" },
 ];
-/** Index used for the abnormal-move and regime filters: US ids -> S&P 500, bare ASX codes -> ASX 200, others none. */
-const INDEX_SYMBOL = (id: string): string | null =>
-  id.endsWith(".US") ? "^GSPC" : !id.includes(".") ? "^AXJO" : null;
+const INDEX_SYMBOL = indexSymbolFor;
 
-const UNIVERSES = {
+const UNIVERSES: Record<string, { l: string; ids: readonly string[] }> = {
   usliq: { l: "US liquid (~125)", ids: US_LIQUID.map((c) => `${c}.US`) },
   us: { l: "US mega-caps (20)", ids: US_MEGA.map((c) => `${c}.US`) },
   asx50: { l: "ASX 50", ids: ASX_50 },
   asx: { l: "ASX 20", ids: ASX_20 },
+  ...Object.fromEntries(
+    SECTORS.map((x) => [`sec:${x.id}`, { l: `Sector: ${x.label}`, ids: x.ids }]),
+  ),
   custom: { l: "Custom list", ids: [] as string[] },
-} as const;
-type UniverseId = keyof typeof UNIVERSES;
+};
+type UniverseId = string;
 
 const KINDS: { v: EventKind; l: string }[] = [
   { v: "gap-up", l: "Gap up" },
@@ -106,7 +111,7 @@ const ENTRIES: { v: EntryAt; l: string }[] = [
 const REASON = { hold: "Held", stop: "Stop", target: "Target" } as const;
 
 type TabId =
-  "summary" | "split" | "tune" | "rules" | "paper" | "events" | "ticker" | "live";
+  "summary" | "split" | "tune" | "rules" | "paper" | "events" | "ticker" | "sector" | "ceo" | "funds" | "live";
 const TABS: { id: TabId; label: string }[] = [
   { id: "summary", label: "Summary" },
   { id: "split", label: "Train vs test" },
@@ -115,6 +120,9 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "paper", label: "Paper" },
   { id: "events", label: "Events" },
   { id: "ticker", label: "By ticker" },
+  { id: "sector", label: "By sector" },
+  { id: "ceo", label: "CEO sentiment" },
+  { id: "funds", label: "Funds" },
   { id: "live", label: "Live signals" },
 ];
 
@@ -1161,20 +1169,24 @@ export function ModelView() {
           title="Hypothesis"
           bodyClass="flex flex-col gap-2.5 overflow-auto p-3"
         >
-          <label>
+          <div>
             <span className={label}>Preset</span>
-            <select
-              className={input}
+            {/* "Group: idea" labels split into a small group header and a short row */}
+            <Dropdown
+              label="Preset"
               value={hypo}
-              onChange={(e) => pickHypo(e.target.value)}
-            >
-              {HYPOTHESES.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.label}
-                  {h.tuned ? " (tuned)" : ""}
-                </option>
-              ))}
-            </select>
+              onChange={pickHypo}
+              options={HYPOTHESES.map((h) => {
+                const [group, ...rest] = h.label.split(": ");
+                const text = rest.join(": ") || h.label;
+                return {
+                  id: h.id,
+                  group: rest.length ? group : undefined,
+                  label: text.charAt(0).toUpperCase() + text.slice(1),
+                  badge: h.tuned ? "Tuned" : undefined,
+                };
+              })}
+            />
             {(() => {
               const h = HYPOTHESES.find((x) => x.id === hypo);
               if (h?.tuned) {
@@ -1197,7 +1209,7 @@ export function ModelView() {
                 </span>
               ) : null;
             })()}
-          </label>
+          </div>
           <button
             type="button"
             onClick={() => void autoTune()}
@@ -1425,6 +1437,7 @@ export function ModelView() {
 
         <Panel
           title="Results"
+          className="order-first lg:order-none"
           right={
             <Tabs
               tabs={TABS}
@@ -1437,8 +1450,19 @@ export function ModelView() {
         >
           {err ? (
             <p className="text-sm text-warn">{err}</p>
+          ) : tab === "funds" ? (
+            <FundsPanel />
+          ) : tab === "sector" ? (
+            <SectorPanel
+              rule={typeof ruleObj === "string" ? null : ruleObj}
+              spec={typeof specObj === "string" ? null : specObj}
+              years={years}
+              hypoLabel={HYPOTHESES.find((x) => x.id === hypo)?.label ?? hypo}
+            />
           ) : !data && tab === "rules" ? (
             <RulesPanel preset={hypo} />
+          ) : !data && tab === "ceo" ? (
+            <CeoSentimentPanel />
           ) : !data && tab === "paper" ? (
             <PaperPanel />
           ) : !data ? (
@@ -1510,6 +1534,7 @@ export function ModelView() {
               )}
               {tab === "rules" && <RulesPanel preset={hypo} />}
               {tab === "paper" && <PaperPanel />}
+              {tab === "ceo" && <CeoSentimentPanel />}
               {tab === "tune" && (
                 <TunePanel res={tuneRes} running={tuning !== null} />
               )}

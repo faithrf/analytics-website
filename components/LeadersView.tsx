@@ -15,6 +15,8 @@ import {
   type DelayTone,
   type InsidersData,
   type LeaderRow,
+  type MergerDeal,
+  type MergersData,
   type Range,
   type StakesData,
 } from "@/lib/leaders-shared";
@@ -28,6 +30,7 @@ const SUBS = [
   { id: "insiders", label: "Insiders" },
   { id: "congress", label: "Congress" },
   { id: "stakes", label: "Big stakes" },
+  { id: "mergers", label: "M&A" },
 ] as const;
 type Sub = (typeof SUBS)[number]["id"];
 
@@ -68,6 +71,7 @@ function Banner({
   count,
   since,
   failed,
+  noun = ["trade", "trades"],
 }: {
   rule: ReactNode;
   fetchedAt?: number;
@@ -77,13 +81,14 @@ function Banner({
   range: Range;
   count: number;
   since?: number;
+  noun?: [string, string];
 }) {
   const now = useNow();
   const partial = range === "week" && now && weekIncomplete(since, now);
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-md border border-warn/40 bg-warn/10 px-3 py-1.5 text-sm">
       <span className="font-semibold">
-        {range === "week" ? `Last ${WEEK_DAYS} days` : "Latest"} · {count} {count === 1 ? "trade" : "trades"}
+        {range === "week" ? `Last ${WEEK_DAYS} days` : "Latest"} · {count} {count === 1 ? noun[0] : noun[1]}
         <span className="font-normal"> · {rule}</span>
       </span>
       <span className="text-xs text-muted">
@@ -140,6 +145,7 @@ function TickerCell({ row }: { row: LeaderRow }) {
 }
 
 function Table({ rows, kind, empty, fl }: { rows: LeaderRow[]; kind: Sub; empty: string; fl: Fl }) {
+  const now = useNow();
   const stakes = kind === "stakes";
   const th = "px-2 py-1.5 text-left text-xs font-medium text-muted whitespace-nowrap";
   return (
@@ -205,7 +211,7 @@ function Table({ rows, kind, empty, fl }: { rows: LeaderRow[]; kind: Sub; empty:
                 {!stakes && <td className="px-2 py-1 whitespace-nowrap text-muted">{r.size}</td>}
                 <td className="px-2 py-1 whitespace-nowrap">{fmtDay(r.traded)}</td>
                 <td className="px-2 py-1 whitespace-nowrap" title={r.filedAt ? new Date(r.filedAt).toLocaleString() : undefined}>
-                  {r.filedAt && kind !== "congress" ? whenShort(r.filedAt, Date.now()) : fmtDay(r.filed)}
+                  {r.filedAt && kind !== "congress" ? whenShort(r.filedAt, now) : fmtDay(r.filed)}
                 </td>
                 <td className="px-2 py-1">
                   <DelayPill days={days} />
@@ -236,14 +242,15 @@ function Loading() {
 
 function Insiders({ range, fl }: { range: Range; fl: Fl }) {
   const api = useApi<InsidersData>("/api/leaders/insiders", 300_000);
+  const now = useNow();
   const [all, setAll] = useState(false);
   const [q, setQ] = useState("");
   const rows = useMemo(() => {
     const s = q.trim().toUpperCase();
-    return applyRange(api.data?.rows ?? [], range, "insiders", Date.now()).filter(
+    return applyRange(api.data?.rows ?? [], range, "insiders", now).filter(
       (r) => (all || r.code === "P" || r.code === "S") && (!s || r.ticker?.includes(s) || r.who.toUpperCase().includes(s)) && (!fl.only || fl.match(r)),
     );
-  }, [api.data, all, q, range, fl]);
+  }, [api.data, all, q, range, fl, now]);
   return (
     <>
       <Banner
@@ -286,7 +293,7 @@ function Congress({ range, fl }: { range: Range; fl: Fl }) {
   const [chamber, setChamber] = useState<"all" | "house" | "senate">("all");
   const [who, setWho] = useState("");
   const [q, setQ] = useState("");
-  const now = Date.now();
+  const now = useNow();
 
   const watch = useMemo(() => {
     const n = new Map<string, number>();
@@ -297,7 +304,7 @@ function Congress({ range, fl }: { range: Range; fl: Fl }) {
 
   const rows = useMemo(() => {
     const s = q.trim().toUpperCase();
-    return applyRange(api.data?.rows ?? [], range, "congress", Date.now()).filter(
+    return applyRange(api.data?.rows ?? [], range, "congress", now).filter(
       (r) =>
         (!fresh || isFresh(delayDays(r.traded, r.filed))) &&
         (side === "all" || r.side === side) &&
@@ -306,7 +313,7 @@ function Congress({ range, fl }: { range: Range; fl: Fl }) {
         (!s || r.ticker?.includes(s)) &&
         (!fl.only || fl.match(r)),
     );
-  }, [api.data, fresh, side, chamber, who, q, range, fl]);
+  }, [api.data, fresh, side, chamber, who, q, range, fl, now]);
 
   const houseDays = range === "week" ? WEEK_DAYS : HOUSE_LATEST_DAYS;
   const houseCut = new Date(now - houseDays * 86_400_000).toISOString().slice(0, 10);
@@ -396,9 +403,10 @@ function Congress({ range, fl }: { range: Range; fl: Fl }) {
 
 function Stakes({ range, fl }: { range: Range; fl: Fl }) {
   const api = useApi<StakesData>("/api/leaders/stakes", 600_000);
+  const now = useNow();
   const rows = useMemo(
-    () => applyRange(api.data?.rows ?? [], range, "stakes", Date.now()).filter((r) => !fl.only || fl.match(r)),
-    [api.data, range, fl],
+    () => applyRange(api.data?.rows ?? [], range, "stakes", now).filter((r) => !fl.only || fl.match(r)),
+    [api.data, range, fl, now],
   );
   return (
     <>
@@ -416,6 +424,101 @@ function Stakes({ range, fl }: { range: Range; fl: Fl }) {
         <Loading />
       ) : (
         <Table fl={fl} rows={rows} kind="stakes" empty="No Schedule 13D/13G filings listed right now." />
+      )}
+    </>
+  );
+}
+
+function Mergers({ range, fl }: { range: Range; fl: Fl }) {
+  const api = useApi<MergersData>("/api/leaders/mergers", 600_000);
+  const now = useNow();
+  const [q, setQ] = useState("");
+  const rows = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return applyRange(api.data?.rows ?? [], range, "mergers", now).filter(
+      (r) => (!s || r.company?.toLowerCase().includes(s) || r.who.toLowerCase().includes(s)) && (!fl.only || fl.match(r)),
+    ) as MergerDeal[];
+  }, [api.data, q, range, fl, now]);
+  const th = "px-2 py-1.5 text-left text-xs font-medium text-muted whitespace-nowrap";
+  return (
+    <>
+      <Banner
+        rule="Tender offers, merger proxies and deal registrations, one row per company. Newest filing shown."
+        fetchedAt={api.data?.fetchedAt}
+        range={range}
+        count={rows.length}
+        since={api.data?.since}
+        failed={!!api.error && !api.data}
+        noun={["deal", "deals"]}
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filter company"
+          aria-label="Filter by company"
+          className="h-7 w-44 rounded border border-line bg-panel2 px-2 text-xs"
+        />
+      </div>
+      {api.error && !api.data ? (
+        <ErrorBox error={api.error} onRetry={api.reload} compact />
+      ) : api.loading ? (
+        <Loading />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto rounded-md border border-line">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-panel2">
+              <tr>
+                <th className={th}>Filed</th>
+                <th className={th}>Company</th>
+                <th className={th}>Latest filing</th>
+                <th className={th}>Form</th>
+                <th className={th} aria-label="Filing" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-3 py-8 text-center text-muted">
+                    No M&A filings listed right now.
+                  </td>
+                </tr>
+              )}
+              {rows.map((r) => (
+                <tr key={r.id} className="border-t border-line hover:bg-panel2">
+                  <td className="px-2 py-1 whitespace-nowrap" title={r.filedAt ? new Date(r.filedAt).toLocaleString() : undefined}>
+                    {r.filedAt ? whenShort(r.filedAt, now) : fmtDay(r.filed)}
+                  </td>
+                  <td className="px-2 py-1">
+                    <div className="max-w-[34ch] truncate font-medium" title={r.company}>
+                      {r.company}
+                    </div>
+                    {r.who !== r.company && (
+                      <div className="max-w-[34ch] truncate text-xs text-muted" title={r.who}>
+                        Filed by {r.who}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    {r.action}
+                    {r.count > 1 && (
+                      <span className="text-xs text-muted" title={r.labels.join(", ")}>
+                        {" "}
+                        +{r.count - 1} more
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-2 py-1 whitespace-nowrap text-muted">{r.code}</td>
+                  <td className="px-2 py-1">
+                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">
+                      Filing ↗
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );
@@ -507,7 +610,7 @@ export function LeadersView() {
       bodyClass="flex min-h-0 flex-col gap-2 p-3"
     >
       <FollowBar fl={fl} setOnly={setOnly} add={f.follow} />
-      {sub === "insiders" ? <Insiders range={range} fl={fl} /> : sub === "congress" ? <Congress range={range} fl={fl} /> : <Stakes range={range} fl={fl} />}
+      {sub === "insiders" ? <Insiders range={range} fl={fl} /> : sub === "congress" ? <Congress range={range} fl={fl} /> : sub === "mergers" ? <Mergers range={range} fl={fl} /> : <Stakes range={range} fl={fl} />}
     </Panel>
   );
 }

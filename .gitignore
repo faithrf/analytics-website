@@ -19,3 +19,4 @@ AGENTS.md
 # research data cache
 .cache/
 research-out/
+vercel-deploy.log

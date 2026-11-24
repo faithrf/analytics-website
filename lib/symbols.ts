@@ -23,10 +23,13 @@ const SUFFIXED_RE = /^[A-Z0-9][A-Z0-9-]{0,7}\.(US|L|DE|PA|AS|T|HK)$/;
 const FUTURES_RE = /^[A-Z0-9]{1,6}=F$/;
 const INDEX_RE = /^\^[A-Z0-9]{1,8}$/;
 
-/** Futures ("CL=F") and indices ("^GSPC"): no company, options or fundamentals. */
+const CRYPTO_RE = /^[A-Z0-9]{2,10}-USD$/;
+
+/** Futures ("CL=F"), indices ("^GSPC") and spot crypto ("BTC-USD"): no company, options or fundamentals. */
 export const isFuturesId = (id: string) => FUTURES_RE.test(id);
 export const isIndexId = (id: string) => INDEX_RE.test(id);
-export const isNonEquityId = (id: string) => isFuturesId(id) || isIndexId(id);
+export const isCryptoId = (id: string) => CRYPTO_RE.test(id);
+export const isNonEquityId = (id: string) => isFuturesId(id) || isIndexId(id) || isCryptoId(id);
 
 export function isValidId(id: string): boolean {
   return ASX_RE.test(id) || SUFFIXED_RE.test(id) || isNonEquityId(id);
@@ -46,6 +49,7 @@ export function regionOf(id: string): RegionId {
 export function marketOf(id: string): string {
   if (isFuturesId(id)) return "Futures";
   if (isIndexId(id)) return "Index";
+  if (isCryptoId(id)) return "Crypto";
   return SUFFIX[suffixOf(id)]?.market ?? "ASX";
 }
 

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { direction, fmtPct, fmtSigned } from "@/lib/format";
 import type { ApiErr } from "@/lib/use-api";
 
@@ -32,6 +32,117 @@ export function Panel({
   );
 }
 
+export type DropdownOption<T extends string> = { id: T; label: string; group?: string; badge?: string };
+
+/**
+ * Styled replacement for <select>: the native phone picker can't be themed.
+ * Phones get a bottom sheet; wider screens a popover anchored under the button
+ * (fixed, so a scrolling panel can't clip it).
+ */
+export function Dropdown<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+  className = "",
+}: {
+  options: readonly DropdownOption<T>[];
+  value: T;
+  onChange: (id: T) => void;
+  label: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ left: number; top: number; width: number } | null>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const cur = options.find((o) => o.id === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent && e.key !== "Escape") return;
+      setOpen(false);
+    };
+    window.addEventListener("keydown", close);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("keydown", close);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
+  const toggle = () => {
+    const r = btn.current?.getBoundingClientRect();
+    if (r) setPos({ left: r.left, top: r.bottom + 4, width: Math.max(r.width, 240) });
+    setOpen((o) => !o);
+  };
+
+  return (
+    <div className={className}>
+      <button
+        ref={btn}
+        type="button"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={toggle}
+        className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-line bg-panel2 px-2.5 py-1.5 text-left text-sm text-ink"
+      >
+        <span className="min-w-0 truncate">
+          {cur?.group && <span className="text-muted">{cur.group} · </span>}
+          {cur?.label ?? "Choose"}
+        </span>
+        <svg aria-hidden viewBox="0 0 20 20" className={`size-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2}>
+          <path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <button aria-label="Close" tabIndex={-1} className="fixed inset-0 z-[60] cursor-default bg-black/50 md:bg-transparent" onClick={() => setOpen(false)} />
+          <ul
+            role="listbox"
+            aria-label={label}
+            style={pos ? ({ "--dd-left": `${pos.left}px`, "--dd-top": `${pos.top}px`, "--dd-w": `${pos.width}px` } as React.CSSProperties) : undefined}
+            className="fixed inset-x-0 bottom-0 z-[61] max-h-[70dvh] overflow-auto rounded-t-2xl border-t border-line bg-panel p-1.5 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-2xl md:inset-x-auto md:bottom-auto md:top-[var(--dd-top)] md:left-[var(--dd-left)] md:max-h-[60vh] md:w-[var(--dd-w)] md:rounded-lg md:border md:pb-1.5"
+          >
+            {options.map((o, i) => {
+              const header = o.group && o.group !== options[i - 1]?.group ? o.group : null;
+              const sel = o.id === value;
+              return (
+                <li key={o.id} role="presentation">
+                  {header && (
+                    <div className="px-2.5 pt-2.5 pb-1 text-[10px] font-semibold tracking-wider text-muted uppercase first:pt-1">
+                      {header}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={sel}
+                    onClick={() => {
+                      onChange(o.id);
+                      setOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm md:py-1.5 ${sel ? "bg-panel2 font-medium text-accent" : "text-ink hover:bg-panel2"}`}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                    {o.badge && (
+                      <span className="shrink-0 rounded bg-accent px-1 py-px text-[10px] font-semibold text-accentink">{o.badge}</span>
+                    )}
+                    <svg aria-hidden viewBox="0 0 20 20" className={`size-4 shrink-0 ${sel ? "" : "invisible"}`} fill="none" stroke="currentColor" strokeWidth={2.2}>
+                      <path d="M4.5 10.5l3.5 3.5 7.5-8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function Tabs<T extends string>({
   tabs,
   value,
@@ -43,11 +154,23 @@ export function Tabs<T extends string>({
   onChange: (id: T) => void;
   label: string;
 }) {
+  // Many tabs overflow a phone header and hide off-screen, so phones get a dropdown instead.
+  const many = tabs.length > 5;
   return (
+    <>
+    {many && (
+      <Dropdown
+        label={label}
+        value={value}
+        onChange={onChange}
+        options={tabs}
+        className="md:hidden"
+      />
+    )}
     <div
       role="tablist"
       aria-label={label}
-      className="flex max-w-full gap-0.5 overflow-x-auto rounded-md bg-panel2 p-0.5 whitespace-nowrap [scrollbar-width:none]"
+      className={`${many ? "hidden md:flex" : "flex"} max-w-full gap-0.5 overflow-x-auto rounded-md bg-panel2 p-0.5 whitespace-nowrap [scrollbar-width:none]`}
     >
       {tabs.map((t) => {
         const active = t.id === value;
@@ -73,6 +196,7 @@ export function Tabs<T extends string>({
         );
       })}
     </div>
+    </>
   );
 }
 

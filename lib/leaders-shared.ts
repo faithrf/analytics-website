@@ -66,6 +66,50 @@ export interface StakesData extends LeadersMeta {
   rows: LeaderRow[];
 }
 
+export interface MergersData extends LeadersMeta {
+  rows: MergerDeal[];
+}
+
+/** One company's recent M&A filings rolled into a row: the newest filing plus a count. */
+export interface MergerDeal extends LeaderRow {
+  /** filings seen for this company in the window */
+  count: number;
+  /** distinct plain-English labels, newest first */
+  labels: string[];
+}
+
+/** Plain-English label for an EDGAR M&A form type. */
+export function mergerLabel(form: string): string {
+  const f = form.toUpperCase().replace(/\s+/g, " ").trim();
+  const amend = /\/A$/.test(f) ? " (amended)" : "";
+  const base = f.replace(/\/A$/, "");
+  const name =
+    base === "SC TO-T" || base === "SCHEDULE TO-T" ? "Tender offer"
+    : base === "SC 14D9" || base === "SC14D9" ? "Target response to offer"
+    : base === "DEFM14A" ? "Merger vote proxy"
+    : base === "PREM14A" ? "Merger proxy (draft)"
+    : base === "S-4" ? "Stock deal registration"
+    : base === "425" ? "Deal communication"
+    : null;
+  return name ? name + amend : form;
+}
+
+/** Same company under slightly different spellings groups together. */
+export const companyKey = (name: string) =>
+  name.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\b(inc|corp|corporation|co|ltd|llc|plc|holdings?|the)\b/g, " ").replace(/\s+/g, " ").trim();
+
+/** One row per company (newest filing wins), newest first. Filings are LeaderRows with code = form type. */
+export function groupDeals(filings: LeaderRow[]): MergerDeal[] {
+  const groups = new Map<string, LeaderRow[]>();
+  for (const f of [...filings].sort(byFiledDesc)) {
+    const k = companyKey(f.company ?? f.who) || f.id;
+    const g = groups.get(k);
+    if (g) g.push(f);
+    else groups.set(k, [f]);
+  }
+  return [...groups.values()].map((g) => ({ ...g[0], count: g.length, labels: [...new Set(g.map((x) => x.action))] })).sort(byFiledDesc);
+}
+
 /** A trade filed within this many days counts as "fresh". */
 export const FRESH_DAYS = 3;
 
@@ -109,7 +153,7 @@ export const WEEK_DAYS = 7;
 /** House filings strip in Latest mode. */
 export const HOUSE_LATEST_DAYS = 3;
 /** "Latest" view shows this many newest rows per source. */
-export const LATEST_COUNT = { insiders: 60, congress: 20, stakes: 40 } as const;
+export const LATEST_COUNT = { insiders: 60, congress: 20, stakes: 40, mergers: 40 } as const;
 
 /** When a row was filed, in ms: exact time if known, else midnight UTC of the filed date. */
 export function filedTime(r: Pick<LeaderRow, "filed" | "filedAt">): number | null {

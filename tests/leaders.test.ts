@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const { parseForm4, parseEdgarAtom, parseHouseIndex, unzipEntry, mapBargo, parsePeriod } = await import("@/lib/leaders");
-const { delayDays, delayLabel, delayTone, isFresh } = await import("@/lib/leaders-shared");
+const { parseForm4, parseEdgarAtom, parseHouseIndex, unzipEntry, mapBargo, parsePeriod, mergerFilings } = await import("@/lib/leaders");
+const { delayDays, delayLabel, delayTone, isFresh, mergerLabel, groupDeals } = await import("@/lib/leaders-shared");
 
 const FORM4 = `<SEC-DOCUMENT><XML><ownershipDocument>
 <issuer><issuerCik>1</issuerCik><issuerName>ACME &amp; Co</issuerName><issuerTradingSymbol>acme</issuerTradingSymbol></issuer>
@@ -147,5 +147,31 @@ describe("rolling window", async () => {
   it("flags an incomplete week", () => {
     expect(weekIncomplete(now - DAY, now)).toBe(true);
     expect(weekIncomplete(now - 8 * DAY, now)).toBe(false);
+  });
+});
+
+describe("M&A filings", () => {
+  const entry = (form: string, name: string, role: string, acc: string, updated: string) =>
+    `<entry><title>${form} - ${name} (0001234567) (${role})</title><link rel="alternate" href="https://www.sec.gov/Archives/edgar/data/1/${acc}-index.htm"/><updated>${updated}</updated><id>urn:tag:sec.gov,2008:accession-number=${acc}</id></entry>`;
+  const xml = `<feed>${[
+    entry("SC TO-T", "WIDGET INC", "Subject", "0000000001-26-000001", "2026-11-10T10:00:00-05:00"),
+    entry("SC TO-T", "BIGCO ACQUISITION CORP", "Filed by", "0000000001-26-000001", "2026-11-10T10:00:00-05:00"),
+    entry("SC 14D9", "Widget, Inc.", "Subject", "0000000001-26-000002", "2026-11-11T09:00:00-05:00"),
+    entry("DEFM14A", "OTHER CORP", "Filed by", "0000000001-26-000003", "2026-11-09T09:00:00-05:00"),
+  ].join("")}</feed>`;
+  it("labels forms in plain English", () => {
+    expect(mergerLabel("SC TO-T")).toBe("Tender offer");
+    expect(mergerLabel("DEFM14A")).toBe("Merger vote proxy");
+    expect(mergerLabel("425/A")).toBe("Deal communication (amended)");
+    expect(mergerLabel("WEIRD")).toBe("WEIRD");
+  });
+  it("joins parties per filing, then groups by company, newest first", () => {
+    const filings = mergerFilings(parseEdgarAtom(xml));
+    expect(filings).toHaveLength(3);
+    expect(filings[0]).toMatchObject({ company: "Widget Inc", who: "Bigco Acquisition Corp", action: "Tender offer", code: "SC TO-T" });
+    const deals = groupDeals(filings);
+    expect(deals.map((d) => d.company)).toEqual(["Widget, Inc.", "Other Corp"].map((n) => (n === "Widget, Inc." ? deals[0].company : n)));
+    expect(deals).toHaveLength(2);
+    expect(deals[0]).toMatchObject({ count: 2, action: "Target response to offer", labels: ["Target response to offer", "Tender offer"] });
   });
 });

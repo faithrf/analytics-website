@@ -5,6 +5,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "deploy": "vercel --prod --yes --no-color > vercel-deploy.log 2>&1",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -12,17 +13,22 @@
     "test": "vitest run",
     "verify-tickers": "tsx scripts/verify-tickers.ts",
     "model:train": "tsx scripts/model-train.ts",
+    "ceo:sentiment": "tsx --env-file-if-exists=.env.local scripts/ceo-sentiment.ts",
+    "funds:snapshot": "tsx --env-file-if-exists=.env.local scripts/fund-snapshot.ts",
+    "funds:signals": "tsx --env-file-if-exists=.env.local scripts/fund-signals.ts",
+    "push:setup": "tsx scripts/push-setup.ts",
     "paper:update": "tsx scripts/paper-momentum.ts",
     "bump:small": "npm version minor --no-git-tag-version",
     "bump:big": "npm version major --no-git-tag-version"
   },
   "dependencies": {
     "@upstash/redis": "^1.40.0",
-    "next": "^16.4.3",
+    "next": "^16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "recharts": "^3.10.1",
     "server-only": "^0.0.1",
+    "web-push": "^4.0.0",
     "yahoo-finance2": "^4.0.5"
   },
   "devDependencies": {
@@ -30,8 +36,9 @@
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.4.3",
+    "eslint-config-next": "^16.4.6",
     "postcss": "^8.5.32",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",

@@ -2,8 +2,8 @@ import "server-only";
 import { inflateRawSync } from "node:zlib";
 import { ApiError } from "@/lib/api";
 import { TtlCache } from "@/lib/cache";
-import { mergeRows, WEEK_DAYS } from "@/lib/leaders-shared";
-import type { CongressData, HouseFiling, InsidersData, LeaderRow, StakesData } from "@/lib/leaders-shared";
+import { groupDeals, mergeRows, mergerLabel, WEEK_DAYS } from "@/lib/leaders-shared";
+import type { CongressData, HouseFiling, InsidersData, LeaderRow, MergersData, StakesData } from "@/lib/leaders-shared";
 
 /**
  * Public trade disclosures: SEC Form 4 (insiders), STOCK Act reports (Congress)
@@ -62,6 +62,7 @@ function money(n: number): string {
 }
 
 const g = globalThis as unknown as {
+  __mergers?: Map<string, LeaderRow>;
   __leaders2?: {
     store: { insiders: Map<string, LeaderRow>; congress: Map<string, LeaderRow>; stakes: Map<string, LeaderRow> };
     since: number;
@@ -297,6 +298,56 @@ async function loadStakes(): Promise<StakesData> {
 
 export const getStakes = () =>
   shared.data.getOrLoad("stakes", STAKES_TTL, loadStakes, { staleOnError: true, swrMs: HOUR }).catch(upstream("SEC Schedule 13D/13G filings")) as Promise<StakesData>;
+
+/* ---------- M&A filings ---------- */
+
+const MERGER_FORMS = ["SC%20TO-T", "SC%2014D9", "DEFM14A", "PREM14A", "S-4", "425"];
+const MERGER_TTL = 10 * 60_000;
+const mergerStore = (g.__mergers ??= new Map<string, LeaderRow>());
+
+/** Turn atom entries (each filing is listed once per party) into one LeaderRow per accession. */
+export function mergerFilings(entries: AtomEntry[]): LeaderRow[] {
+  const byAcc = new Map<string, { e: AtomEntry; subject?: string; filer?: string }>();
+  for (const e of entries) {
+    const cur = byAcc.get(e.accession) ?? { e };
+    if (/subject|issuer/i.test(e.role)) cur.subject = e.name;
+    else if (/filed by|reporting/i.test(e.role)) cur.filer = e.name;
+    byAcc.set(e.accession, cur);
+  }
+  return [...byAcc.entries()].map(([acc, { e, subject, filer }]) => ({
+    id: acc,
+    who: titleCase(filer ?? e.name),
+    company: titleCase(subject ?? filer ?? e.name),
+    action: mergerLabel(e.form),
+    side: "other" as const,
+    code: e.form,
+    traded: null,
+    filed: filedDate(e.updated),
+    filedAt: filedMs(e.updated),
+    url: e.link,
+  }));
+}
+
+async function loadMergers(): Promise<MergersData> {
+  const entries: AtomEntry[] = [];
+  let ok = 0;
+  let lastErr: unknown;
+  for (const t of MERGER_FORMS) {
+    try {
+      entries.push(...parseEdgarAtom(await secFetch(`https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=${t}&output=atom&count=40`)));
+      ok++;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (!ok) throw lastErr;
+  const now = Date.now();
+  mergeRows(mergerStore, mergerFilings(entries), now);
+  return { rows: groupDeals([...mergerStore.values()]), fetchedAt: now, since: shared.since };
+}
+
+export const getMergers = () =>
+  shared.data.getOrLoad("mergers", MERGER_TTL, loadMergers, { staleOnError: true, swrMs: HOUR }).catch(upstream("SEC merger filings")) as Promise<MergersData>;
 
 /* ---------- House Clerk filing index ---------- */
 

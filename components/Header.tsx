@@ -7,6 +7,7 @@ import { isRegion, region, type RegionId } from "@/lib/markets";
 import { regionOf } from "@/lib/symbols";
 import { useMarketStatus } from "@/lib/use-market-status";
 import { SearchBox } from "@/components/SearchBox";
+import { AlertsDialog } from "@/components/AlertsDialog";
 
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
@@ -125,7 +126,7 @@ function NavMenu() {
   const [open, setOpen] = useState(false);
   const current = NAV.find((n) => isActive(n.href, path))?.label ?? "Menu";
   return (
-    <div className="relative xl:hidden" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
+    <div className="relative hidden md:block xl:hidden" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
       <button
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
@@ -162,6 +163,7 @@ function UserMenu() {
   const acct = useAccount();
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [alertsOpen, setAlertsOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -194,6 +196,8 @@ function UserMenu() {
   const canDelete = !acct.isAdmin && !acct.user.isPersona && !acct.impersonatedBy;
   const item = "block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-panel2";
   return (
+    <>
+    {alertsOpen && <AlertsDialog onClose={() => setAlertsOpen(false)} />}
     <div className="relative shrink-0" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
       <button
         onClick={() => setOpen((o) => !o)}
@@ -211,6 +215,18 @@ function UserMenu() {
             <Link href="/admin" role="menuitem" className={item} onClick={() => setOpen(false)}>
               Admin
             </Link>
+          )}
+          {!acct.impersonatedBy && (
+            <button
+              role="menuitem"
+              className={item}
+              onClick={() => {
+                setOpen(false);
+                setAlertsOpen(true);
+              }}
+            >
+              Alerts
+            </button>
           )}
           <button role="menuitem" className={item} onClick={() => void logout()}>
             Log out
@@ -262,12 +278,13 @@ function UserMenu() {
         </div>
       )}
     </div>
+    </>
   );
 }
 
 export function Header() {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-panel px-3 sm:gap-4">
+    <header className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center gap-2 border-b border-line bg-panel px-3 pt-[env(safe-area-inset-top)] sm:gap-4">
       <Link href="/" className="flex shrink-0 items-baseline gap-2 whitespace-nowrap">
         <span className="text-base font-bold tracking-tight">Meridian</span>
       </Link>

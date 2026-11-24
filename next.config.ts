@@ -18,7 +18,10 @@ const nextConfig: NextConfig = {
   // yahoo-finance2 is used server-side only; keep it out of the bundle.
   serverExternalPackages: ["yahoo-finance2"],
   // Shown in the footer as v1.00, v1.01, ... v2.00; bump with `npm run bump:small` or `bump:big`.
-  env: { NEXT_PUBLIC_APP_VERSION: appVersion(pkg.version) },
+  // NEXT_PUBLIC_BUILD_ID lets an open phone app spot a newer deploy and reload (components/AutoUpdate.tsx).
+  env: { NEXT_PUBLIC_APP_VERSION: appVersion(pkg.version), NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_DEPLOYMENT_ID ?? "local" },
+  // The push worker must always be re-fetched so a new version is picked up.
+  headers: async () => [{ source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }] }],
   devIndicators: false, // keeps the dev "N" badge out of README screenshots
 };
 

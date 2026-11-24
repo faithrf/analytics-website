@@ -1,14 +1,14 @@
 {
-  "trainedAt": "2026-11-09T01:10:41.948Z",
+  "trainedAt": "2026-11-20T23:04:24.094Z",
   "window": {
-    "from": "2025-11-09",
-    "to": "2026-11-09"
+    "from": "2025-11-20",
+    "to": "2026-11-20"
   },
   "universe": 198,
   "families": {
     "fade-gap": {
       "promoted": false,
-      "reason": "Only 10 out-of-sample trades (need 30); too few to trust, so the defaults stay.",
+      "reason": "Only 17 out-of-sample trades (need 30); too few to trust, so the defaults stay.",
       "rule": {
         "kind": "gap-up",
         "minPct": 4,
@@ -25,41 +25,41 @@
         "ivBump": 1.3
       },
       "oos": {
-        "n": 10,
-        "hit": 30,
-        "hitLo": 10.7789,
-        "hitHi": 60.3227,
-        "mean": -2.7409,
-        "edge": -2.5055,
-        "t": -1.4243,
-        "p": 0.1568
+        "n": 17,
+        "hit": 41.1765,
+        "hitLo": 21.6108,
+        "hitHi": 63.9949,
+        "mean": -1.9858,
+        "edge": -1.4318,
+        "t": -0.8635,
+        "p": 0.3487
       },
       "defaultOos": {
-        "n": 228,
-        "hit": 46.9298,
-        "hitLo": 40.5564,
-        "hitHi": 53.405,
-        "mean": -0.4595,
-        "edge": -0.2826,
-        "t": -0.7367,
-        "p": 0.4476
+        "n": 243,
+        "hit": 47.3251,
+        "hitLo": 41.1379,
+        "hitHi": 53.5955,
+        "mean": -0.4405,
+        "edge": -0.1764,
+        "t": -0.4785,
+        "p": 0.6174
       },
       "inSample": {
-        "n": 56,
-        "hit": 58.9286,
-        "hitLo": 45.8774,
-        "hitHi": 70.8334,
-        "mean": 0.6607,
-        "edge": 0.7206,
-        "t": 0.9812,
-        "p": 0.3427
+        "n": 32,
+        "hit": 50,
+        "hitLo": 33.6306,
+        "hitHi": 66.3694,
+        "mean": 0.8874,
+        "edge": 1.2423,
+        "t": 1.0176,
+        "p": 0.3087
       },
       "tested": 400,
       "folds": 12
     },
     "spike-puts": {
       "promoted": false,
-      "reason": "Out-of-sample the tuned picks lost money outright (average -0.03%), so the defaults stay.",
+      "reason": "Out-of-sample the tuned picks lost money outright (average -0.17%), so the defaults stay.",
       "rule": {
         "kind": "day-up",
         "minPct": 6,
@@ -75,33 +75,33 @@
         "ivBump": 1.3
       },
       "oos": {
-        "n": 57,
-        "hit": 47.3684,
-        "hitLo": 34.987,
-        "hitHi": 60.0822,
-        "mean": -0.0336,
-        "edge": 0.2197,
-        "t": 0.3574,
-        "p": 0.7233
+        "n": 63,
+        "hit": 46.0317,
+        "hitLo": 34.3087,
+        "hitHi": 58.211,
+        "mean": -0.1667,
+        "edge": 0.217,
+        "t": 0.3724,
+        "p": 0.7113
       },
       "defaultOos": {
-        "n": 146,
-        "hit": 23.2877,
-        "hitLo": 17.1703,
-        "hitHi": 30.7747,
-        "mean": -31.3825,
-        "edge": -2.0797,
-        "t": -0.4166,
-        "p": 0.6533
+        "n": 157,
+        "hit": 24.8408,
+        "hitLo": 18.7369,
+        "hitHi": 32.1464,
+        "mean": -27.9957,
+        "edge": 1.9496,
+        "t": 0.4032,
+        "p": 0.6943
       },
       "inSample": {
-        "n": 192,
-        "hit": 63.0208,
-        "hitLo": 55.9994,
-        "hitHi": 69.5314,
-        "mean": 1.8013,
-        "edge": 2.011,
-        "t": 6.2331,
+        "n": 196,
+        "hit": 62.7551,
+        "hitLo": 55.8024,
+        "hitHi": 69.2174,
+        "mean": 1.7433,
+        "edge": 2.0462,
+        "t": 6.3678,
         "p": 0.001
       },
       "tested": 400,
@@ -131,28 +131,28 @@
         "hitLo": 17.7094,
         "hitHi": 64.4775,
         "mean": -2.8451,
-        "edge": -3.3243,
-        "t": -1.2512,
-        "p": 0.2078
+        "edge": -2.8781,
+        "t": -1.0832,
+        "p": 0.2498
       },
       "defaultOos": {
-        "n": 148,
-        "hit": 52.027,
-        "hitLo": 44.0291,
-        "hitHi": 59.9224,
-        "mean": 0.4662,
-        "edge": -0.0854,
-        "t": -0.1281,
-        "p": 0.9091
+        "n": 166,
+        "hit": 53.012,
+        "hitLo": 45.4375,
+        "hitHi": 60.4503,
+        "mean": 0.4177,
+        "edge": 0.1822,
+        "t": 0.286,
+        "p": 0.7622
       },
       "inSample": {
-        "n": 156,
-        "hit": 79.4872,
-        "hitLo": 72.4785,
-        "hitHi": 85.0785,
-        "mean": 3.0402,
-        "edge": 2.7332,
-        "t": 5.7127,
+        "n": 41,
+        "hit": 82.9268,
+        "hitLo": 68.7371,
+        "hitHi": 91.4749,
+        "mean": 5.6985,
+        "edge": 5.629,
+        "t": 5.8163,
         "p": 0.001
       },
       "tested": 400,
@@ -160,7 +160,7 @@
     },
     "momentum": {
       "promoted": true,
-      "reason": "Walk-forward out-of-sample: 83 trades, edge 2.21 pts, p=0.001, beating the default (1.44 pts).",
+      "reason": "Walk-forward out-of-sample: 84 trades, edge 2.41 pts, p=0.001, beating the default (0.72 pts).",
       "rule": {
         "kind": "day-up",
         "minPct": 4,
@@ -178,33 +178,33 @@
         "ivBump": 1.3
       },
       "oos": {
-        "n": 83,
-        "hit": 80.7229,
-        "hitLo": 70.9564,
-        "hitHi": 87.7712,
-        "mean": 3.2274,
-        "edge": 2.2054,
-        "t": 3.8195,
+        "n": 84,
+        "hit": 80.9524,
+        "hitLo": 71.2761,
+        "hitHi": 87.9214,
+        "mean": 3.2604,
+        "edge": 2.4109,
+        "t": 4.2189,
         "p": 0.001
       },
       "defaultOos": {
-        "n": 223,
-        "hit": 53.3632,
-        "hitLo": 46.814,
-        "hitHi": 59.7985,
-        "mean": 2.0107,
-        "edge": 1.441,
-        "t": 1.7268,
-        "p": 0.0799
+        "n": 248,
+        "hit": 49.5968,
+        "hitLo": 43.4278,
+        "hitHi": 55.7781,
+        "mean": 1.1528,
+        "edge": 0.7171,
+        "t": 0.9204,
+        "p": 0.3756
       },
       "inSample": {
-        "n": 273,
-        "hit": 79.8535,
-        "hitLo": 74.6962,
-        "hitHi": 84.1822,
-        "mean": 3.1648,
-        "edge": 2.8578,
-        "t": 10.7266,
+        "n": 269,
+        "hit": 80.2974,
+        "hitLo": 75.1319,
+        "hitHi": 84.6097,
+        "mean": 3.1936,
+        "edge": 2.8026,
+        "t": 10.4105,
         "p": 0.001
       },
       "tested": 400,
@@ -233,28 +233,28 @@
         "hitLo": 50.0114,
         "hitHi": 83.4989,
         "mean": 2.4736,
-        "edge": 1.5052,
-        "t": 1.3449,
-        "p": 0.1888
+        "edge": 1.7438,
+        "t": 1.5582,
+        "p": 0.1099
       },
       "defaultOos": {
         "n": 102,
         "hit": 50,
         "hitLo": 40.4743,
         "hitHi": 59.5257,
-        "mean": 1.2601,
-        "edge": 0.396,
-        "t": 0.2964,
-        "p": 0.7772
+        "mean": 1.3672,
+        "edge": 0.5164,
+        "t": 0.3878,
+        "p": 0.7033
       },
       "inSample": {
-        "n": 81,
-        "hit": 82.716,
-        "hitLo": 73.0537,
-        "hitHi": 89.4157,
-        "mean": 3.9132,
-        "edge": 3.6063,
-        "t": 7.4678,
+        "n": 79,
+        "hit": 84.8101,
+        "hitLo": 75.2999,
+        "hitHi": 91.0918,
+        "mean": 4.0581,
+        "edge": 3.667,
+        "t": 7.5802,
         "p": 0.001
       },
       "tested": 400,
@@ -262,7 +262,7 @@
     },
     "earn-drift-down": {
       "promoted": false,
-      "reason": "Out-of-sample the tuned picks lost money outright (average -0.98%), so the defaults stay.",
+      "reason": "Out-of-sample the tuned picks lost money outright (average -0.42%), so the defaults stay.",
       "rule": {
         "kind": "earn-down",
         "minPct": 5,
@@ -278,33 +278,33 @@
         "ivBump": 1.3
       },
       "oos": {
-        "n": 45,
-        "hit": 42.2222,
-        "hitLo": 28.9685,
-        "hitHi": 56.6995,
-        "mean": -0.9785,
-        "edge": -0.794,
-        "t": -0.9366,
-        "p": 0.3427
+        "n": 57,
+        "hit": 43.8596,
+        "hitLo": 31.7725,
+        "hitHi": 56.7222,
+        "mean": -0.4246,
+        "edge": 0.278,
+        "t": 0.3659,
+        "p": 0.7343
       },
       "defaultOos": {
-        "n": 90,
-        "hit": 44.4444,
-        "hitLo": 34.6155,
-        "hitHi": 54.7283,
-        "mean": -0.7559,
-        "edge": 0.2214,
-        "t": 0.1961,
-        "p": 0.8212
+        "n": 94,
+        "hit": 46.8085,
+        "hitLo": 37.0457,
+        "hitHi": 56.8219,
+        "mean": -1.2084,
+        "edge": -0.4602,
+        "t": -0.3288,
+        "p": 0.7582
       },
       "inSample": {
-        "n": 161,
-        "hit": 52.795,
-        "hitLo": 45.1086,
-        "hitHi": 60.3512,
-        "mean": 0.7839,
-        "edge": 1.2568,
-        "t": 3.3461,
+        "n": 167,
+        "hit": 52.0958,
+        "hitLo": 44.5574,
+        "hitHi": 59.54,
+        "mean": 0.7479,
+        "edge": 1.2771,
+        "t": 3.449,
         "p": 0.001
       },
       "tested": 400,
@@ -312,7 +312,7 @@
     },
     "covered-call-spike": {
       "promoted": false,
-      "reason": "Only 20 out-of-sample trades (need 30); too few to trust, so the defaults stay.",
+      "reason": "Only 21 out-of-sample trades (need 30); too few to trust, so the defaults stay.",
       "rule": {
         "kind": "day-up",
         "minPct": 6,
@@ -328,33 +328,33 @@
         "ivBump": 1.3
       },
       "oos": {
-        "n": 20,
-        "hit": 75,
-        "hitLo": 53.1295,
-        "hitHi": 88.814,
-        "mean": 4.4168,
-        "edge": 1.9164,
-        "t": 1.1531,
-        "p": 0.2478
+        "n": 21,
+        "hit": 76.1905,
+        "hitLo": 54.9084,
+        "hitHi": 89.3721,
+        "mean": 4.5829,
+        "edge": 2.5859,
+        "t": 1.6269,
+        "p": 0.1039
       },
       "defaultOos": {
-        "n": 201,
-        "hit": 64.6766,
-        "hitLo": 57.85,
-        "hitHi": 70.9528,
-        "mean": 1.6983,
-        "edge": -0.1118,
-        "t": -0.2117,
-        "p": 0.8162
+        "n": 203,
+        "hit": 64.0394,
+        "hitLo": 57.2335,
+        "hitHi": 70.3238,
+        "mean": 1.6042,
+        "edge": -0.2769,
+        "t": -0.4923,
+        "p": 0.6174
       },
       "inSample": {
-        "n": 121,
-        "hit": 90.9091,
-        "hitLo": 84.4526,
-        "hitHi": 94.8479,
-        "mean": 6.7709,
-        "edge": 5.0222,
-        "t": 9.946,
+        "n": 204,
+        "hit": 89.2157,
+        "hitLo": 84.212,
+        "hitHi": 92.7697,
+        "mean": 6.5699,
+        "edge": 4.4098,
+        "t": 9.9345,
         "p": 0.001
       },
       "tested": 400,
@@ -362,7 +362,7 @@
     },
     "cash-put-drop": {
       "promoted": false,
-      "reason": "Out-of-sample edge 0.82 pts is not statistically solid (p=0.42), so the defaults stay.",
+      "reason": "Out-of-sample edge 1.48 pts is not statistically solid (p=0.07), so the defaults stay.",
       "rule": {
         "kind": "day-down",
         "minPct": 6,
@@ -378,33 +378,33 @@
         "ivBump": 1.3
       },
       "oos": {
-        "n": 101,
-        "hit": 70.297,
-        "hitLo": 60.7748,
-        "hitHi": 78.3318,
-        "mean": 2.5248,
-        "edge": 0.8156,
-        "t": 0.8482,
-        "p": 0.4246
+        "n": 98,
+        "hit": 74.4898,
+        "hitLo": 65.0494,
+        "hitHi": 82.0827,
+        "mean": 3.7556,
+        "edge": 1.4789,
+        "t": 1.7753,
+        "p": 0.0709
       },
       "defaultOos": {
-        "n": 200,
-        "hit": 78.5,
-        "hitLo": 72.2976,
-        "hitHi": 83.6282,
-        "mean": 1.4665,
-        "edge": 0.5017,
-        "t": 1.452,
-        "p": 0.1499
+        "n": 208,
+        "hit": 77.8846,
+        "hitLo": 71.7673,
+        "hitHi": 82.9906,
+        "mean": 1.3513,
+        "edge": 0.4166,
+        "t": 1.2071,
+        "p": 0.2218
       },
       "inSample": {
-        "n": 168,
-        "hit": 89.2857,
-        "hitLo": 83.7003,
-        "hitHi": 93.1146,
-        "mean": 4.9054,
-        "edge": 3.1543,
-        "t": 7.6191,
+        "n": 167,
+        "hit": 89.2216,
+        "hitLo": 83.6065,
+        "hitHi": 93.0727,
+        "mean": 4.9041,
+        "edge": 3.2359,
+        "t": 7.7208,
         "p": 0.001
       },
       "tested": 400,
