@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { decideAlerts, isLive, parseAlertSettings, sentKey, tradingDay, type AlertQuote, type AlertSettings } from "@/lib/alerts";
 
-const NOW = Date.UTC(2026, 10, 24, 1, 0); // 12:00 Sydney
+const NL = String.fromCharCode(10);
+const NOW =Date.UTC(2026, 10, 24, 1, 0); // 12:00 Sydney
 const on: AlertSettings = { enabled: true, movePct: 5, bigMovePct: 10, hiLo: true };
 const quote = (o: Partial<AlertQuote> = {}): AlertQuote => ({
   symbol: "BHP.AX",
@@ -42,11 +43,29 @@ describe("decideAlerts", () => {
   it("fires a move alert with the example wording", () => {
     const [a] = decideAlerts(quote(), on, NOW);
     expect(a.level).toBe("move");
-    expect(a.body).toBe("BHP.AX +6.2% to $45.10 (day high $45.30)");
+    expect(a.title).toBe("BHP ▲ +6.2%");
+    expect(a.body.split(NL)).toEqual(["Up 6.2% today (day high $45.30)", "$45.10", "10% below 52-wk high"]);
+  });
+  it("adds name, $ change, volume, where it is followed and a headline", () => {
+    const q = quote({ name: "BHP Group", change: 2.63, currency: "AUD", volume: 9e6, avgVolume: 3e6 });
+    const [a] = decideAlerts(q, on, NOW, new Set(), {
+      inTrade: true,
+      boards: ["Watchlist"],
+      headline: { title: "BHP lifts iron ore guidance", publisher: "Reuters" },
+    });
+    expect(a.title).toBe("BHP ▲ +6.2% · BHP Group");
+    expect(a.body.split(NL)).toEqual([
+      "Up 6.2% today (day high $45.30)",
+      "$45.10 AUD, +$2.63 today",
+      "Volume 3.0× normal · 10% below 52-wk high",
+      "In open trade, Watchlist",
+      "News: BHP lifts iron ore guidance (Reuters)",
+    ]);
   });
   it("uses the day low and a minus for falls", () => {
     const [a] = decideAlerts(quote({ changePct: -5.5, price: 42.5, dayLow: 42.4 }), on, NOW);
-    expect(a.body).toBe("BHP.AX −5.5% to $42.50 (day low $42.40)");
+    expect(a.title).toBe("BHP ▼ −5.5%");
+    expect(a.body.split(NL)[0]).toBe("Down 5.5% today (day low $42.40)");
     expect(a.dir).toBe("down");
   });
   it("stays quiet below the threshold, when disabled, or when the market is shut or stale", () => {
