@@ -132,14 +132,14 @@ export function unpin(s: BoardsState, boardId: string, stockId: string): BoardsS
   return mapBoard(s, boardId, (b) => ({ ...b, ids: b.ids.filter((x) => x !== stockId) }));
 }
 
-/** Moves a pin left (-1) or right (+1) within its board. */
+/** Moves a pin `delta` places within its board (-1 = one earlier); out-of-range moves do nothing. */
 export function move(s: BoardsState, boardId: string, stockId: string, delta: number): BoardsState {
   return mapBoard(s, boardId, (b) => {
     const i = b.ids.indexOf(stockId);
     const j = i + delta;
-    if (i < 0 || j < 0 || j >= b.ids.length) return b;
+    if (i < 0 || delta === 0 || j < 0 || j >= b.ids.length) return b;
     const ids = [...b.ids];
-    [ids[i], ids[j]] = [ids[j], ids[i]];
+    ids.splice(j, 0, ...ids.splice(i, 1));
     return { ...b, ids };
   });
 }

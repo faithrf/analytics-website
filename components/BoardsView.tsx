@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { QuoteDTO } from "@/lib/yahoo";
 import { MAX_BOARDS, MAX_NAME, type Board } from "@/lib/boards";
 import { BOARD_PRESETS, PRESET_GROUPS } from "@/lib/board-presets";
@@ -359,6 +359,32 @@ function BoardGrid({
     refresh,
   );
   const byId = new Map((quotes.data?.quotes ?? []).map((q) => [q.code, q]));
+  // Drag-to-reorder from the grip: pointer events so touch and mouse behave the same.
+  const [drag, setDrag] = useState<{ id: string; over: string | null } | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const startDrag = (e: PointerEvent<HTMLButtonElement>, id: string) => {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDrag({ id, over: null });
+  };
+  const dragMove = (e: PointerEvent<HTMLButtonElement>) => {
+    if (!drag) return;
+    const box = scroller.current?.getBoundingClientRect();
+    // the page scrolls on phones, the grid box scrolls on wide screens: nudge whichever is near its edge
+    const top = Math.max(box?.top ?? 0, 0);
+    const bottom = Math.min(box?.bottom ?? innerHeight, innerHeight - 64);
+    const dy = e.clientY < top + 60 ? -12 : e.clientY > bottom - 60 ? 12 : 0;
+    if (dy) {
+      scroller.current?.scrollBy(0, dy);
+      window.scrollBy(0, dy);
+    }
+    const over = (document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-pin]") as HTMLElement | null)?.dataset.pin ?? null;
+    if (over !== drag.over) setDrag({ ...drag, over: over === drag.id ? null : over });
+  };
+  const dragEnd = () => {
+    if (drag?.over && onMove) onMove(drag.id, ids.indexOf(drag.over) - ids.indexOf(drag.id));
+    setDrag(null);
+  };
 
   if (ids.length === 0) {
     return (
@@ -374,7 +400,7 @@ function BoardGrid({
     return <ErrorBox error={quotes.error} onRetry={quotes.reload} />;
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto">
+    <div ref={scroller} className="min-h-0 flex-1 overflow-auto">
       <div className="mb-2 flex justify-end">
         <Freshness
           dataTime={newest((quotes.data?.quotes ?? []).map((q) => q.time))}
@@ -388,14 +414,17 @@ function BoardGrid({
         />
       </div>
       <ul className="grid auto-rows-[148px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
-        {ids.map((id, i) => {
+        {ids.map((id) => {
           const q = byId.get(id);
           const spark = sparks.data?.sparks[toYahoo(id)];
           const digits = priceDigits(q?.price);
           return (
             <li
               key={id}
-              className="flex min-w-0 flex-col rounded-lg border border-line bg-panel p-3"
+              data-pin={id}
+              className={`flex min-w-0 flex-col rounded-lg border bg-panel p-3 transition-opacity ${
+                drag?.id === id ? "border-accent opacity-50" : drag?.over === id ? "border-accent ring-2 ring-accent/40" : "border-line"
+              }`}
             >
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
@@ -414,22 +443,28 @@ function BoardGrid({
                   </div>
                 </div>
                 {onMove && onUnpin && (
-                  <div className="flex shrink-0 gap-0.5 text-muted">
+                  <div className="flex shrink-0 items-center gap-0.5 text-muted">
                     <button
-                      onClick={() => onMove(id, -1)}
-                      disabled={i === 0}
-                      aria-label={`Move ${displayCode(id)} left`}
-                      className="rounded px-1 hover:text-accent disabled:opacity-30"
+                      onPointerDown={(e) => startDrag(e, id)}
+                      onPointerMove={dragMove}
+                      onPointerUp={dragEnd}
+                      onPointerCancel={() => setDrag(null)}
+                      onKeyDown={(e) => {
+                        const d = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[e.key];
+                        if (d) {
+                          e.preventDefault();
+                          onMove(id, d);
+                        }
+                      }}
+                      aria-label={`Reorder ${displayCode(id)}: drag, or use arrow keys`}
+                      title="Drag to reorder"
+                      className="cursor-grab touch-none rounded p-1 hover:text-accent active:cursor-grabbing"
                     >
-                      {"‹"}
-                    </button>
-                    <button
-                      onClick={() => onMove(id, 1)}
-                      disabled={i === ids.length - 1}
-                      aria-label={`Move ${displayCode(id)} right`}
-                      className="rounded px-1 hover:text-accent disabled:opacity-30"
-                    >
-                      {"›"}
+                      <svg aria-hidden viewBox="0 0 16 16" className="size-4" fill="currentColor">
+                        <circle cx="5.5" cy="3.5" r="1.3" /><circle cx="10.5" cy="3.5" r="1.3" />
+                        <circle cx="5.5" cy="8" r="1.3" /><circle cx="10.5" cy="8" r="1.3" />
+                        <circle cx="5.5" cy="12.5" r="1.3" /><circle cx="10.5" cy="12.5" r="1.3" />
+                      </svg>
                     </button>
                     <button
                       onClick={() => onUnpin(id)}

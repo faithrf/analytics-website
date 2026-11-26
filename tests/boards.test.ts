@@ -98,6 +98,10 @@ describe("board operations", () => {
     s = move(s, "watchlist", "VOD.L", -1);
     expect(s.boards[0].ids).toEqual(["BHP", "AAPL.US", "VOD.L", "7203.T"]);
     expect(move(s, "watchlist", "BHP", -1).boards[0].ids).toEqual(s.boards[0].ids);
+    // drag-and-drop moves several places at once
+    expect(move(s, "watchlist", "7203.T", -3).boards[0].ids).toEqual(["7203.T", "BHP", "AAPL.US", "VOD.L"]);
+    expect(move(s, "watchlist", "BHP", 2).boards[0].ids).toEqual(["AAPL.US", "VOD.L", "BHP", "7203.T"]);
+    expect(move(s, "watchlist", "BHP", 9).boards[0].ids).toEqual(s.boards[0].ids);
     s = unpin(s, "watchlist", "BHP");
     expect(s.boards[0].ids).toEqual(["AAPL.US", "VOD.L", "7203.T"]);
   });
