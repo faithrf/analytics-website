@@ -74,19 +74,21 @@ describe("decideAlerts", () => {
     expect(decideAlerts(quote({ marketState: "CLOSED" }), on, NOW)).toEqual([]);
     expect(decideAlerts(quote({ time: NOW - 3 * 3600_000 }), on, NOW)).toEqual([]);
   });
-  it("fires the big alert at bigMovePct and uses up the smaller level", () => {
+  it("fires the big alert at bigMovePct and uses up the steps below", () => {
     const alerts = decideAlerts(quote({ changePct: 11 }), on, NOW);
     expect(alerts).toHaveLength(1);
     expect(alerts[0].level).toBe("big");
-    expect(alerts[0].keys).toEqual(["big:up", "move:up"]);
+    expect(alerts[0].keys).toEqual(["move:up:2", "move:up:1"]);
   });
-  it("does not repeat a level already sent, but still sends the next one up", () => {
-    expect(decideAlerts(quote(), on, NOW, new Set(["move:up"]))).toEqual([]);
-    expect(decideAlerts(quote({ changePct: 12 }), on, NOW, new Set(["move:up"]))[0].level).toBe("big");
-    expect(decideAlerts(quote({ changePct: 6 }), on, NOW, new Set(["big:up", "move:up"]))).toEqual([]);
+  it("alerts again at each further step but never repeats one", () => {
+    expect(decideAlerts(quote(), on, NOW, new Set(["move:up:1"]))).toEqual([]);
+    expect(decideAlerts(quote({ changePct: 12 }), on, NOW, new Set(["move:up:1"]))[0].level).toBe("big");
+    const third = decideAlerts(quote({ changePct: 15.2 }), on, NOW, new Set(["move:up:2", "move:up:1"]));
+    expect(third[0].keys[0]).toBe("move:up:3");
+    expect(decideAlerts(quote({ changePct: 6 }), on, NOW, new Set(["move:up:2", "move:up:1"]))).toEqual([]);
   });
   it("a fall is deduped separately from a rise", () => {
-    expect(decideAlerts(quote({ changePct: -6 }), on, NOW, new Set(["move:up"]))).toHaveLength(1);
+    expect(decideAlerts(quote({ changePct: -6 }), on, NOW, new Set(["move:up:1"]))).toHaveLength(1);
   });
   it("alerts on a new 52-week high or low and respects the toggle", () => {
     const hi = decideAlerts(quote({ changePct: 1, price: 50.2, high52: 50 }), on, NOW);

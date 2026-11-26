@@ -122,6 +122,10 @@ export interface Alert {
 }
 
 const dedupeKey = (level: AlertLevel, dir: string) => `${level}:${dir}`;
+/** Dedupe key for the nth movePct step in one direction, e.g. "move:up:2" for +10% at 5% steps. */
+export const stepKey = (dir: "up" | "down", n: number) => `move:${dir}:${n}`;
+/** Steps marked as used when one alert jumps several; enough for any realistic day. */
+const MAX_STEP_KEYS = 200;
 
 /** Alerts a quote warrants right now. `sent` holds the dedupe keys already used today. */
 export function decideAlerts(
@@ -150,13 +154,13 @@ export function decideAlerts(
     const lead = `${dir === "up" ? "Up" : "Down"} ${fmtPct(Math.abs(pct), 1).replace(/^\+/, "")} today` +
       (isNum(extreme) ? ` (day ${dir === "up" ? "high" : "low"} $${fmtNum(extreme, digits)})` : "");
     const title = `${code} ${arrow} ${fmtPct(pct, 1)}${who}`;
-    const moveKey = dedupeKey("move", dir);
-    const bigKey = dedupeKey("big", dir);
-    if (Math.abs(pct) >= s.bigMovePct) {
-      // jumping straight past both levels sends only the bigger alert and uses up the smaller one
-      make("big", dir, title, `Big move: ${lead[0].toLowerCase()}${lead.slice(1)}`, [bigKey, moveKey]);
-    } else if (Math.abs(pct) >= s.movePct && !sent.has(bigKey)) {
-      make("move", dir, title, lead, [moveKey]);
+    // One alert per step of movePct (5%, 10%, 15%...). Jumping several steps sends one alert and uses up
+    // the steps below it, so falling back through a level already passed never repeats.
+    const step = Math.floor(Math.abs(pct) / s.movePct + 1e-9);
+    if (step >= 1) {
+      const big = Math.abs(pct) >= s.bigMovePct;
+      const keys = Array.from({ length: Math.min(step, MAX_STEP_KEYS) }, (_, i) => stepKey(dir, step - i));
+      make(big ? "big" : "move", dir, title, big ? `Big move: ${lead[0].toLowerCase()}${lead.slice(1)}` : lead, keys);
     }
   }
 
